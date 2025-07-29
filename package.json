@@ -1,0 +1,43 @@
+{
+	"name": "twp-types",
+	"version": "0.1.0",
+	"description": "A powerful CLI tool for liquid file analysis using Rust/WASM",
+	"bin": {
+		"twp-types": "./index.js"
+	},
+	"main": "pkg/twp_types.js",
+	"types": "pkg/twp_types.d.ts",
+	"files": [
+		"pkg/**/*",
+		"index.js",
+		"README.md"
+	],
+	"scripts": {
+		"build": "wasm-pack build --target nodejs --out-dir pkg",
+		"test": "npm run test:rust && npm run test:js",
+		"test:rust": "cargo test",
+		"test:js": "node test.js",
+		"prepublishOnly": "npm run build"
+	},
+	"keywords": [
+		"cli",
+		"wasm",
+		"rust",
+		"liquid",
+		"Shopify",
+		"TWP",
+		"The Working Party"
+	],
+	"author": "The Working Party",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/the-working-party/twp-types"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"devDependencies": {
+		"wasm-pack": "^0.13.1"
+	}
+}
