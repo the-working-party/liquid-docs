@@ -9,9 +9,8 @@ Another line here
 TODO: Another task
 Last line of the file`;
 
-fs.writeFileSync("test.txt", test_content);
-
 console.log("Running CLI tests...\n");
+fs.writeFileSync("test.txt", test_content);
 
 // Test commands
 const tests = [

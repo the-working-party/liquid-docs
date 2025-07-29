@@ -1,68 +1,68 @@
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-#[derive(Serialize, Deserialize)]
-pub struct FileStats {
-	pub lines: usize,
-	pub words: usize,
-	pub chars: usize,
-	pub first_line: String,
+#[derive(Debug, Serialize)]
+pub struct Files {
+	pub path: String,
+	pub liquid_types: Vec<LiquidType>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LiquidType {
+	pub description: String,
+	pub param: Vec<Param>,
+	pub example: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Param {
+	pub name: String,
+	#[serde(rename = "type")]
+	pub type_: String,
+	pub description: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FileInput {
+	path: String,
+	content: String,
 }
 
 #[wasm_bindgen]
-pub fn analyze_file(content: &str) -> Result<JsValue, JsValue> {
-	let lines = content.lines().count();
-	let words = content.split_whitespace().count();
-	let chars = content.chars().count();
-	let first_line = content.lines().next().unwrap_or("File is empty").to_string();
-
-	let stats = FileStats {
-		lines,
-		words,
-		chars,
-		first_line: String::from(&first_line),
-	};
-
-	serde_wasm_bindgen::to_value(&stats).map_err(|e| JsValue::from_str(&e.to_string()))
-}
+pub struct TwpTypes {}
 
 #[wasm_bindgen]
-pub fn get_first_line(content: &str) -> String {
-	match content.lines().next() {
-		Some(line) => String::from(line),
-		None => String::from("File is empty"),
+impl TwpTypes {
+	pub fn parse(input: JsValue) -> Result<JsValue, JsValue> {
+		let _files: Vec<FileInput> =
+			serde_wasm_bindgen::from_value(input).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+		log(&format!("{:?}", _files));
+
+		serde_wasm_bindgen::to_value(&vec!["test"]).map_err(|e| JsValue::from_str(&e.to_string()))
 	}
 }
 
-#[wasm_bindgen]
-pub fn count_pattern(content: &str, pattern: &str) -> usize {
-	content.matches(pattern).count()
-}
-
-#[wasm_bindgen]
-pub fn extract_lines(content: &str, start: usize, end: usize) -> Vec<String> {
-	content.lines().skip(start).take(end - start).map(String::from).collect::<Vec<String>>()
-}
-
-// Log to browser/Node console
-#[wasm_bindgen]
 pub fn log(msg: &str) {
 	web_sys::console::log_1(&msg.into());
+}
+
+#[wasm_bindgen]
+pub fn help() -> String {
+	format!(
+		r#"
+ ▀█▀ █ █ █ █▀█ ▄▄ ▀█▀ █▄█ █▀█ █▀▀ █▀▀
+  █  ▀▄▀▄▀ █▀▀     █   █  █▀▀ ██▄ ▄▄█
+
+A parser for Shopify liquid doc tags
+https://shopify.dev/docs/storefronts/themes/tools/liquid-doc
+
+Usage: twp-types <path>
+"#
+	)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	#[test]
-	fn get_first_line_test() {
-		assert_eq!(get_first_line("Hello\nWorld"), "Hello");
-		assert_eq!(get_first_line(""), "File is empty");
-	}
-
-	#[test]
-	fn count_pattern_test() {
-		assert_eq!(count_pattern("hello hello world", "hello"), 2);
-		assert_eq!(count_pattern("rust is great", "python"), 0);
-	}
 }

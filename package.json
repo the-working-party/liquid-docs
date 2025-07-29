@@ -14,7 +14,7 @@
 	],
 	"scripts": {
 		"build": "wasm-pack build --target nodejs --out-dir pkg",
-		"test": "npm run test:rust && npm run test:js",
+		"test": "npm run build && npm run test:rust && npm run test:js",
 		"test:rust": "cargo test",
 		"test:js": "node test.js",
 		"prepublishOnly": "npm run build"
@@ -39,5 +39,8 @@
 	},
 	"devDependencies": {
 		"wasm-pack": "^0.13.1"
+	},
+	"dependencies": {
+		"glob": "^11.0.3"
 	}
 }
