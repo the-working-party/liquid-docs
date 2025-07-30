@@ -1,0 +1,21 @@
+{% doc %}
+	Navigation snippet to display the drawer for mobile view and calls the nav snippets
+
+	@example
+	{% render 'nav' %}
+{% enddoc %}
+
+<div class="fader fader--nav" data-toggle-nav></div>
+<nav class="drawer drawer--left">
+	<button
+		type="button"
+		class="btn-none nav-close hide--min-lg"
+		aria-label="{{ 'general.navigation.close_navigation' | t }}"
+	>
+		{% render 'icon-cross' %}
+	</button>
+	{% render '0_header-section-main-navigation' %}
+	<div class="container nav__secondary">
+		{%- render 'header-section-secondary-nav', nav_class: 'nav-secondary--mobile' -%}
+	</div>
+</nav>
