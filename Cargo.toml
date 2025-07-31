@@ -1,6 +1,6 @@
 [package]
 name = "twp-types"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 authors = ["Dominik Wilkowski <hi@dominik-wilkowski.com>"]
 description = "A CLI tool to process liquid files using Rust/WASM"
