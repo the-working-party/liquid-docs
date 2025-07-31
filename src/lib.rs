@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 #[derive(Debug, Serialize)]
-pub struct Files {
+pub struct LiquidFile {
 	pub path: String,
 	pub liquid_types: Vec<DocBlock>,
 }
@@ -39,40 +39,51 @@ struct FileInput {
 
 #[wasm_bindgen]
 pub fn parse(input: JsValue) -> Result<JsValue, JsValue> {
-	let _files: Vec<FileInput> = serde_wasm_bindgen::from_value(input).map_err(|e| JsValue::from_str(&e.to_string()))?;
+	let files: Vec<FileInput> = serde_wasm_bindgen::from_value(input).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+	for file in files {
+		if let Some(blocks) = TwpTypes::extract_doc_blocks(&file.content) {
+			let mut liquid_file = LiquidFile {
+				path: file.path,
+				liquid_types: Vec::with_capacity(blocks.len()),
+			};
+
+			// TODO: Implement parsing logic here
+		}
+	}
 
 	serde_wasm_bindgen::to_value(&vec!["test"]).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// The main struct that parses the content of liquid files
 pub struct TwpTypes<'a> {
 	content: &'a str,
 	chars: std::iter::Peekable<std::str::CharIndices<'a>>,
-	current_pos: Option<usize>,
 }
 
 impl<'a> TwpTypes<'a> {
+	/// Extract a collection of all doc blocks from the given content without the wrapping doc tag
 	fn extract_doc_blocks(content: &'a str) -> Option<Vec<&'a str>> {
-		if !content.contains("doc") {
-			return None;
-		}
+		// This may find more than just the closing tags for our doc blocks which means we sometimes may not return early
+		// but that's still better then never returning early
+		let possible_doc_blocks = content.matches("enddoc").count();
 
-		if !content.contains("{%") {
+		if possible_doc_blocks == 0 {
 			return None;
 		}
 
 		let mut parser = Self {
 			content,
 			chars: content.char_indices().peekable(),
-			current_pos: None,
 		};
 
-		let mut blocks = Vec::new();
+		let mut blocks = Vec::with_capacity(possible_doc_blocks);
+		let mut found_blocks = 0;
 
-		while let Some((idx, ch)) = parser.chars.next() {
-			parser.current_pos = Some(idx);
-
+		while let Some((_, ch)) = parser.chars.next() {
 			if ch == '{' && parser.chars.peek().map(|(_, c)| *c) == Some('%') {
 				parser.chars.next(); // consume '%'
+				parser.skip_dash();
 				parser.skip_whitespace();
 
 				if parser.peek_matches("#") {
@@ -92,13 +103,14 @@ impl<'a> TwpTypes<'a> {
 
 				if parser.peek_matches("doc") {
 					parser.consume_chars(3);
-					let doc_content_start = parser.find_tag_close()?;
+					let doc_content_start = parser.skip_to_tag_close()?;
 					let doc_content_end = parser.find_tag("enddoc", false)?;
 					blocks.push(&content[doc_content_start..doc_content_end]);
+					found_blocks += 1;
 				}
 			}
 
-			if !parser.remaining_content_has("doc") {
+			if found_blocks == possible_doc_blocks {
 				break;
 			}
 		}
@@ -106,59 +118,56 @@ impl<'a> TwpTypes<'a> {
 		(!blocks.is_empty()).then_some(blocks)
 	}
 
-	fn remaining_content_has(&self, substr: &str) -> bool {
-		if let Some(current) = self.current_pos {
-			self.content[current..].contains(substr)
-		} else {
-			true
-		}
-	}
-
+	/// Move the cursor to the next non-whitespace character
 	fn skip_whitespace(&mut self) {
 		while self.chars.peek().map(|(_, ch)| ch.is_whitespace()).unwrap_or(false) {
-			let (idx, _) = self.chars.next().unwrap(); // Safe because peek confirmed
-			self.current_pos = Some(idx);
+			self.chars.next();
 		}
 	}
 
+	/// Skip an optional dash character for whitespace control
+	fn skip_dash(&mut self) {
+		if self.chars.peek().map(|(_, ch)| *ch == '-').unwrap_or(false) {
+			self.chars.next();
+		}
+	}
+
+	/// Check if the following content matches a specific substring
 	fn peek_matches(&mut self, word: &str) -> bool {
 		self
 			.chars
 			.peek()
-			.and_then(|(start_pos, _)| {
+			.map(|(start_pos, _)| {
 				let end_pos = start_pos + word.len();
 
 				if end_pos <= self.content.len() && &self.content[*start_pos..end_pos] == word {
 					if end_pos < self.content.len() {
+						// Safe because if the string comparison succeeds, end_pos must be on a char boundary
 						let next_byte = self.content.as_bytes()[end_pos];
-						Some(!next_byte.is_ascii_alphabetic())
+						!next_byte.is_ascii_alphanumeric()
 					} else {
-						Some(true) // End of content is a valid boundary
+						true // End of content is a valid boundary
 					}
 				} else {
-					Some(false)
+					false
 				}
 			})
 			.unwrap_or(false)
 	}
 
+	/// Consume a number of characters from the input stream
 	fn consume_chars(&mut self, count: usize) {
-		let mut last_idx = self.current_pos;
-
 		for _ in 0..count {
-			if let Some((idx, _)) = self.chars.next() {
-				last_idx = Some(idx);
-			} else {
+			if self.chars.next().is_none() {
 				break;
 			}
 		}
-
-		self.current_pos = last_idx;
 	}
 
-	/// Return position after %}
-	fn find_tag_close(&mut self) -> Option<usize> {
+	/// Move to position after next %}
+	fn skip_to_tag_close(&mut self) -> Option<usize> {
 		self.skip_whitespace();
+		self.skip_dash();
 		if let Some((_, ch)) = self.chars.peek() {
 			if *ch == '%' {
 				self.chars.next(); // consume '%'
@@ -171,20 +180,20 @@ impl<'a> TwpTypes<'a> {
 		None
 	}
 
+	/// Find the next given tag in the input stream and either return the position before or after the closing tag
 	fn find_tag(&mut self, tag: &str, return_end: bool) -> Option<usize> {
 		while let Some((idx, ch)) = self.chars.next() {
-			self.current_pos = Some(idx);
-
 			if ch == '{' && self.chars.peek().map(|(_, c)| *c) == Some('%') {
 				let tag_start = idx; // Save position before {%
 				self.chars.next(); // consume '%'
+				self.skip_dash();
 				self.skip_whitespace();
 
 				if self.peek_matches(tag) {
 					if return_end {
 						// Consume the tag and find the closing %}
 						self.consume_chars(tag.len());
-						return self.find_tag_close();
+						return self.skip_to_tag_close();
 					} else {
 						// Return position before {%
 						return Some(tag_start);
@@ -195,29 +204,17 @@ impl<'a> TwpTypes<'a> {
 		None
 	}
 
-	fn skip_to_tag_close(&mut self) {
-		while let Some((idx, ch)) = self.chars.next() {
-			self.current_pos = Some(idx);
-			if ch == '%' && self.chars.peek().map(|(_, c)| *c) == Some('}') {
-				if let Some((idx, _)) = self.chars.next() {
-					self.current_pos = Some(idx);
-				}
-				break;
-			}
-		}
-	}
-
+	/// Move to next given closing tag
 	fn skip_to_end_tag(&mut self, end_tag: &str) {
-		while let Some((idx, ch)) = self.chars.next() {
-			self.current_pos = Some(idx);
-
+		while let Some((_, ch)) = self.chars.next() {
 			if ch == '{' && self.chars.peek().map(|(_, c)| *c) == Some('%') {
 				self.chars.next(); // consume '%'
+				self.skip_dash();
 				self.skip_whitespace();
 
 				if self.peek_matches(end_tag) {
 					self.consume_chars(end_tag.len());
-					self.find_tag_close(); // Skip to %}
+					self.skip_to_tag_close(); // Skip to %}
 					return;
 				}
 			}
@@ -227,16 +224,18 @@ impl<'a> TwpTypes<'a> {
 
 #[wasm_bindgen]
 pub fn help() -> String {
+	// TODO: write proper help
 	format!(
 		r#"
  ▀█▀ █ █ █ █▀█ ▄▄ ▀█▀ █▄█ █▀█ █▀▀ █▀▀
-  █  ▀▄▀▄▀ █▀▀     █   █  █▀▀ ██▄ ▄▄█
+  █  ▀▄▀▄▀ █▀▀     █   █  █▀▀ ██▄ ▄▄█ v{}
 
 A parser for Shopify liquid doc tags
 https://shopify.dev/docs/storefronts/themes/tools/liquid-doc
 
 Usage: twp-types <path>
-"#
+"#,
+		env!("CARGO_PKG_VERSION")
 	)
 }
 
@@ -248,7 +247,18 @@ mod tests {
 	fn test_extract_doc_blocks() {
 		assert_eq!(TwpTypes::extract_doc_blocks("test"), None);
 		assert_eq!(TwpTypes::extract_doc_blocks("{% doc %}test{% enddoc %}test"), Some(vec!["test"]));
-		assert_eq!(TwpTypes::extract_doc_blocks("{% doc %}\ntest{% enddoc %}\ntest"), Some(vec!["\ntest"]));
+		assert_eq!(TwpTypes::extract_doc_blocks("{%- doc %}test{% enddoc %}test"), Some(vec!["test"]));
+		assert_eq!(TwpTypes::extract_doc_blocks("{%- doc -%}test{% enddoc %}test"), Some(vec!["test"]));
+		assert_eq!(TwpTypes::extract_doc_blocks("{%- doc -%}test{%- enddoc %}test"), Some(vec!["test"]));
+		assert_eq!(TwpTypes::extract_doc_blocks("{%- doc -%}test{%- enddoc -%}test"), Some(vec!["test"]));
+		assert_eq!(TwpTypes::extract_doc_blocks("{% doc %}test{% enddoc1 %}test"), None);
+		assert_eq!(
+			TwpTypes::extract_doc_blocks(
+				"{% doc %}block1\n  line1\n  line2\n  line3\n\n{% enddoc %}test\n{% doc %}block2{% enddoc %}"
+			),
+			Some(vec!["block1\n  line1\n  line2\n  line3\n\n", "block2"])
+		);
+		assert_eq!(TwpTypes::extract_doc_blocks("{% doc %}\n\ntest{% enddoc %}\n\ntest"), Some(vec!["\n\ntest"]));
 		assert_eq!(
 			TwpTypes::extract_doc_blocks("{%       doc  %}  test {%  enddoc         %} test"),
 			Some(vec!["  test "])
@@ -257,5 +267,28 @@ mod tests {
 		assert_eq!(TwpTypes::extract_doc_blocks("{% raw %}{% doc %}test{% enddoc %}{% endraw %}test"), None);
 		assert_eq!(TwpTypes::extract_doc_blocks("{% raw %}{% doc %}test{% enddoc %}{% endraw %}test"), None);
 		assert_eq!(TwpTypes::extract_doc_blocks("{% comment %}{% doc %}test{% enddoc %}{% endcomment %}test"), None);
+		assert_eq!(TwpTypes::extract_doc_blocks("{% doc %}{% enddoc %}"), Some(vec![""]));
+
+		let doc = r#"
+  Provides an example of a snippet description.
+
+  @param {string} title - The title to display
+  @param {number} [max_items] - Optional maximum number of items to show
+
+  @example
+  {% render 'example-snippet', title: 'Featured Products', max_items: 3 %}
+"#;
+		let content = format!(
+			r#"{{% doc %}}{doc}{{% enddoc %}}
+{{% if article.image %}}
+	<div class="article-card__image">
+		{{%- render 'component-image', image: article.image, aspect_ratio: 'natural', max_width: 960, sizes: sizes -%}}
+		<div class="image-overlay"></div>
+	</div>
+{{% endif %}}
+"#
+		);
+
+		assert_eq!(TwpTypes::extract_doc_blocks(&content), Some(vec![doc]));
 	}
 }
