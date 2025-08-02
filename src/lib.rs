@@ -11,28 +11,29 @@ pub struct LiquidFile {
 	pub liquid_types: Vec<DocBlock>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Default, Serialize, PartialEq)]
 pub struct DocBlock {
 	pub description: String,
 	pub param: Vec<Param>,
 	pub example: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq, Default)]
 pub enum ParamType {
+	#[default]
 	String,
 	Number,
 	Boolean,
 	Object,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq, Default)]
 pub struct Param {
 	pub name: String,
+	pub description: String,
 	#[serde(rename = "type")]
 	pub type_: ParamType,
 	pub optional: bool,
-	pub description: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,6 +46,8 @@ struct FileInput {
 pub fn parse(input: JsValue) -> Result<JsValue, JsValue> {
 	let files: Vec<FileInput> = serde_wasm_bindgen::from_value(input).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
+	let mut all_files = Vec::with_capacity(files.len());
+
 	for file in files {
 		if let Some(blocks) = TwpTypes::extract_doc_blocks(&file.content) {
 			let mut liquid_file = LiquidFile {
@@ -52,11 +55,17 @@ pub fn parse(input: JsValue) -> Result<JsValue, JsValue> {
 				liquid_types: Vec::with_capacity(blocks.len()),
 			};
 
-			// TODO: Implement parsing logic here
+			for block in blocks {
+				if let Some(block_type) = TwpTypes::parse_doc_content(block) {
+					liquid_file.liquid_types.push(block_type);
+				}
+			}
+
+			all_files.push(liquid_file);
 		}
 	}
 
-	serde_wasm_bindgen::to_value(&vec!["test"]).map_err(|e| JsValue::from_str(&e.to_string()))
+	serde_wasm_bindgen::to_value(&all_files).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 #[wasm_bindgen]

@@ -1,3 +1,5 @@
+use crate::{DocBlock, Param, ParamType};
+
 /// The main struct that parses the content of liquid files
 pub struct TwpTypes<'a> {
 	content: &'a str,
@@ -61,6 +63,85 @@ impl<'a> TwpTypes<'a> {
 		(!blocks.is_empty()).then_some(blocks)
 	}
 
+	pub fn parse_doc_content(content: &'a str) -> Option<DocBlock> {
+		let mut parser = Self {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		let mut doc_block = DocBlock::default();
+		let mut description = String::new();
+
+		while let Some((idx, ch)) = parser.chars.next() {
+			if doc_block.description.is_empty() && ch != '@' {
+				description.push(ch);
+			}
+
+			if doc_block.description.is_empty() && ch == '@' && !description.is_empty() {
+				let mut taken = std::mem::take(&mut description);
+				Self::trim_in_place(&mut taken);
+				doc_block.description = taken;
+			}
+
+			if ch == '@' {
+				// According to specs at https://shopify.dev/docs/storefronts/themes/tools/liquid-doc
+				// > If you provide multiple descriptions, then only the first one will appear when hovering over a render tag
+				if parser.peek_matches("description") && doc_block.description.is_empty() {
+					parser.consume_chars(12);
+					let start_pos = idx + 12;
+					let end_pos = parser.find_next("@").unwrap_or(content.len());
+					let mut description = content[start_pos..end_pos].to_string();
+					Self::trim_in_place(&mut description);
+					doc_block.description = description;
+					parser.consume_chars(end_pos - start_pos);
+				}
+
+				if parser.peek_matches("param") {
+					parser.consume_chars(6);
+					parser.skip_whitespace();
+					let mut param = Param::default();
+					let (_, ch) = if let Some((pos, ch)) = parser.chars.peek() {
+						(*pos, *ch)
+					} else {
+						continue;
+					};
+
+					let mut is_valid = true;
+
+					if ch == '{' {
+						parser.chars.next();
+						parser.skip_whitespace();
+						if parser.peek_matches("string") {
+							param.type_ = ParamType::String;
+						} else if parser.peek_matches("number") {
+							param.type_ = ParamType::Number;
+						} else if parser.peek_matches("boolean") {
+							param.type_ = ParamType::Boolean;
+						} else if parser.peek_matches("object") {
+							param.type_ = ParamType::Object;
+						} else {
+							parser.find_next("@").unwrap_or(content.len());
+							is_valid = false;
+						}
+					}
+
+					parser.skip_whitespace();
+					// TODO: parse name, check optionality, parse description
+
+					if is_valid {
+						doc_block.param.push(param);
+					}
+				}
+			}
+		}
+
+		if doc_block == DocBlock::default() {
+			None
+		} else {
+			Some(doc_block)
+		}
+	}
+
 	/// Move the cursor to the next non-whitespace character
 	fn skip_whitespace(&mut self) {
 		while self.chars.peek().map(|(_, ch)| ch.is_whitespace()).unwrap_or(false) {
@@ -83,7 +164,7 @@ impl<'a> TwpTypes<'a> {
 			.map(|(start_pos, _)| {
 				let end_pos = start_pos + word.len();
 
-				if end_pos <= self.content.len() && &self.content[*start_pos..end_pos] == word {
+				if end_pos <= self.content.len() && self.content[*start_pos..end_pos].eq_ignore_ascii_case(word) {
 					if end_pos < self.content.len() {
 						// Safe because if the string comparison succeeds, end_pos must be on a char boundary
 						let next_byte = self.content.as_bytes()[end_pos];
@@ -123,27 +204,42 @@ impl<'a> TwpTypes<'a> {
 		None
 	}
 
+	/// Find the next occurrence of a string and return its position
+	fn find_next(&mut self, target: &str) -> Option<usize> {
+		if target.is_empty() {
+			return None;
+		}
+
+		while let Some((pos, _)) = self.chars.peek() {
+			if pos + target.len() <= self.content.len() && self.content[*pos..pos + target.len()] == *target {
+				return Some(*pos);
+			}
+			self.chars.next();
+		}
+
+		None
+	}
+
 	/// Find the next given tag in the input stream and either return the position before or after the closing tag
 	fn find_tag(&mut self, tag: &str, return_end: bool) -> Option<usize> {
-		while let Some((idx, ch)) = self.chars.next() {
-			if ch == '{' && self.chars.peek().map(|(_, c)| *c) == Some('%') {
-				let tag_start = idx; // Save position before {%
-				self.chars.next(); // consume '%'
-				self.skip_dash();
-				self.skip_whitespace();
+		while let Some(tag_start) = self.find_next("{%") {
+			let current_pos = self.chars.peek().map(|(pos, _)| *pos).unwrap_or(self.content.len());
+			self.consume_chars(tag_start - current_pos + 2); // consume chars to tag and tag itself
+			let saved_position = tag_start;
 
-				if self.peek_matches(tag) {
-					if return_end {
-						// Consume the tag and find the closing %}
-						self.consume_chars(tag.len());
-						return self.skip_to_tag_close();
-					} else {
-						// Return position before {%
-						return Some(tag_start);
-					}
+			self.skip_dash();
+			self.skip_whitespace();
+
+			if self.peek_matches(tag) {
+				if return_end {
+					self.consume_chars(tag.len());
+					return self.skip_to_tag_close();
+				} else {
+					return Some(saved_position);
 				}
 			}
 		}
+
 		None
 	}
 
@@ -163,6 +259,24 @@ impl<'a> TwpTypes<'a> {
 			}
 		}
 	}
+
+	/// Trim leading and trailing whitespace in place without any extra heap allocation
+	fn trim_in_place(s: &mut String) {
+		// Leading whitespace
+		if let Some(first_non_ws) = s.find(|c: char| !c.is_whitespace()) {
+			if first_non_ws > 0 {
+				s.drain(..first_non_ws);
+			}
+		} else {
+			s.clear();
+			return;
+		}
+
+		// Trailing whitespace
+		if let Some(last_non_ws) = s.rfind(|c: char| !c.is_whitespace()) {
+			s.truncate(last_non_ws + 1);
+		}
+	}
 }
 
 #[cfg(test)]
@@ -170,7 +284,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test_extract_doc_blocks() {
+	fn extract_doc_blocks_test() {
 		assert_eq!(TwpTypes::extract_doc_blocks("test"), None);
 		assert_eq!(TwpTypes::extract_doc_blocks("{% doc %}test{% enddoc %}test"), Some(vec!["test"]));
 		assert_eq!(TwpTypes::extract_doc_blocks("{%- doc %}test{% enddoc %}test"), Some(vec!["test"]));
@@ -216,5 +330,130 @@ mod tests {
 		);
 
 		assert_eq!(TwpTypes::extract_doc_blocks(&content), Some(vec![doc]));
+	}
+
+	#[test]
+	fn parse_doc_content_description_test() {
+		assert_eq!(TwpTypes::parse_doc_content("test"), None);
+		assert_eq!(
+			TwpTypes::parse_doc_content(
+				r#"
+			The description 1
+			With new lines
+		and different indentation
+end
+
+@description The description 2
+also with new lines
+  and some indentation
+end
+"#
+			),
+			Some(DocBlock {
+				description: String::from("The description 1\n\t\t\tWith new lines\n\t\tand different indentation\nend"),
+				param: Vec::new(),
+				example: String::new()
+			})
+		);
+		assert_eq!(
+			TwpTypes::parse_doc_content(
+				r#"
+@description The description 2
+also with new lines
+  and some indentation
+end
+"#
+			),
+			Some(DocBlock {
+				description: String::from("The description 2\nalso with new lines\n  and some indentation\nend"),
+				param: Vec::new(),
+				example: String::new()
+			})
+		);
+	}
+
+	#[test]
+	fn parse_doc_content_param_test() {
+		assert_eq!(
+			TwpTypes::parse_doc_content(
+				r#"
+Description with words
+
+@param {string}  [var1] - Optional variable 1
+@param {number}  var2   - Variable 2
+@param {boolean} var3   - Variable 3
+@param {unknown} var4   - Variable 4
+@param {object}  var5   - Variable 5
+"#
+			),
+			Some(DocBlock {
+				description: String::from("Description with words"),
+				param: vec![
+					Param {
+						name: String::from("var1"),
+						description: String::from("Optional variable 1"),
+						type_: ParamType::String,
+						optional: true,
+					},
+					Param {
+						name: String::from("var2"),
+						description: String::from("Variable 2"),
+						type_: ParamType::Number,
+						optional: false,
+					},
+					Param {
+						name: String::from("var3"),
+						description: String::from("Variable 3"),
+						type_: ParamType::Boolean,
+						optional: false,
+					},
+					Param {
+						name: String::from("var4"),
+						description: String::from("Variable 4"),
+						type_: ParamType::Object,
+						optional: false,
+					}
+				],
+				example: String::new()
+			})
+		);
+	}
+
+	#[test]
+	fn find_next_test() {
+		let content = "start @test end";
+
+		assert_eq!(
+			TwpTypes {
+				content,
+				chars: content.char_indices().peekable(),
+			}
+			.find_next("@test"),
+			Some(6)
+		);
+		assert_eq!(
+			TwpTypes {
+				content,
+				chars: content.char_indices().peekable(),
+			}
+			.find_next("@"),
+			Some(6)
+		);
+		assert_eq!(
+			TwpTypes {
+				content,
+				chars: content.char_indices().peekable(),
+			}
+			.find_next("t"),
+			Some(1)
+		);
+		assert_eq!(
+			TwpTypes {
+				content,
+				chars: content.char_indices().peekable(),
+			}
+			.find_next("te"),
+			Some(7)
+		);
 	}
 }
