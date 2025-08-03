@@ -29,7 +29,7 @@ impl<'a> TwpTypes<'a> {
 			if ch == '{' && parser.chars.peek().map(|(_, c)| *c) == Some('%') {
 				parser.chars.next(); // consume '%'
 				parser.skip_dash();
-				parser.skip_whitespace();
+				parser.consume_whitespace();
 
 				if parser.peek_matches("#") {
 					parser.skip_to_tag_close();
@@ -63,6 +63,7 @@ impl<'a> TwpTypes<'a> {
 		(!blocks.is_empty()).then_some(blocks)
 	}
 
+	/// Parse doc block content
 	pub fn parse_doc_content(content: &'a str) -> Option<DocBlock> {
 		let mut parser = Self {
 			content,
@@ -89,7 +90,7 @@ impl<'a> TwpTypes<'a> {
 				if parser.peek_matches("description") && doc_block.description.is_empty() {
 					parser.consume_chars(12);
 					let start_pos = idx + 12;
-					let end_pos = parser.find_next("@").unwrap_or(content.len());
+					let end_pos = parser.consume_until("@").unwrap_or(content.len());
 					let mut description = content[start_pos..end_pos].to_string();
 					Self::trim_in_place(&mut description);
 					doc_block.description = description;
@@ -98,7 +99,7 @@ impl<'a> TwpTypes<'a> {
 
 				if parser.peek_matches("param") {
 					parser.consume_chars(6);
-					parser.skip_whitespace();
+					parser.consume_whitespace();
 					let mut param = Param::default();
 					let (_, ch) = if let Some((pos, ch)) = parser.chars.peek() {
 						(*pos, *ch)
@@ -106,31 +107,52 @@ impl<'a> TwpTypes<'a> {
 						continue;
 					};
 
-					let mut is_valid = true;
-
+					// type
 					if ch == '{' {
 						parser.chars.next();
-						parser.skip_whitespace();
+						parser.consume_whitespace();
 						if parser.peek_matches("string") {
 							param.type_ = ParamType::String;
+							parser.consume_chars(7);
 						} else if parser.peek_matches("number") {
 							param.type_ = ParamType::Number;
+							parser.consume_chars(7);
 						} else if parser.peek_matches("boolean") {
 							param.type_ = ParamType::Boolean;
+							parser.consume_chars(8);
 						} else if parser.peek_matches("object") {
 							param.type_ = ParamType::Object;
+							parser.consume_chars(7);
 						} else {
-							parser.find_next("@").unwrap_or(content.len());
-							is_valid = false;
+							parser.consume_until("@").unwrap_or(content.len());
+							continue;
 						}
 					}
 
-					parser.skip_whitespace();
-					// TODO: parse name, check optionality, parse description
+					// optionality
+					parser.consume_whitespace();
+					let (start_pos, optional) = if let Some((pos, ch)) = parser.chars.peek() {
+						if ch == &'[' { (*pos + 1, true) } else { (*pos, false) }
+					} else {
+						continue;
+					};
+					param.optional = optional;
 
-					if is_valid {
-						doc_block.param.push(param);
-					}
+					// name
+					let end_pos = parser.consume_until(" ").unwrap_or(content.len());
+					param.name = content[start_pos..if optional { end_pos - 1 } else { end_pos }].to_string();
+
+					// description
+					parser.consume_whitespace();
+					let start_pos = if let Some((pos, ch)) = parser.chars.peek() {
+						if ch == &'-' { *pos + 1 } else { *pos }
+					} else {
+						content.len()
+					};
+					let end_pos = parser.consume_until("@").unwrap_or(content.len());
+					param.description = content[start_pos..end_pos].trim().to_string();
+
+					doc_block.param.push(param);
 				}
 			}
 		}
@@ -143,7 +165,7 @@ impl<'a> TwpTypes<'a> {
 	}
 
 	/// Move the cursor to the next non-whitespace character
-	fn skip_whitespace(&mut self) {
+	fn consume_whitespace(&mut self) {
 		while self.chars.peek().map(|(_, ch)| ch.is_whitespace()).unwrap_or(false) {
 			self.chars.next();
 		}
@@ -190,7 +212,7 @@ impl<'a> TwpTypes<'a> {
 
 	/// Move to position after next %}
 	fn skip_to_tag_close(&mut self) -> Option<usize> {
-		self.skip_whitespace();
+		self.consume_whitespace();
 		self.skip_dash();
 		if let Some((_, ch)) = self.chars.peek() {
 			if *ch == '%' {
@@ -205,7 +227,7 @@ impl<'a> TwpTypes<'a> {
 	}
 
 	/// Find the next occurrence of a string and return its position
-	fn find_next(&mut self, target: &str) -> Option<usize> {
+	fn consume_until(&mut self, target: &str) -> Option<usize> {
 		if target.is_empty() {
 			return None;
 		}
@@ -222,13 +244,13 @@ impl<'a> TwpTypes<'a> {
 
 	/// Find the next given tag in the input stream and either return the position before or after the closing tag
 	fn find_tag(&mut self, tag: &str, return_end: bool) -> Option<usize> {
-		while let Some(tag_start) = self.find_next("{%") {
+		while let Some(tag_start) = self.consume_until("{%") {
 			let current_pos = self.chars.peek().map(|(pos, _)| *pos).unwrap_or(self.content.len());
 			self.consume_chars(tag_start - current_pos + 2); // consume chars to tag and tag itself
 			let saved_position = tag_start;
 
 			self.skip_dash();
-			self.skip_whitespace();
+			self.consume_whitespace();
 
 			if self.peek_matches(tag) {
 				if return_end {
@@ -249,7 +271,7 @@ impl<'a> TwpTypes<'a> {
 			if ch == '{' && self.chars.peek().map(|(_, c)| *c) == Some('%') {
 				self.chars.next(); // consume '%'
 				self.skip_dash();
-				self.skip_whitespace();
+				self.consume_whitespace();
 
 				if self.peek_matches(end_tag) {
 					self.consume_chars(end_tag.len());
@@ -380,8 +402,8 @@ end
 Description with words
 
 @param {string}  [var1] - Optional variable 1
-@param {number}  var2   - Variable 2
-@param {boolean} var3   - Variable 3
+		@param {number}  var2   - Variable 2
+  @param {boolean} [var3]   - Variable 3
 @param {unknown} var4   - Variable 4
 @param {object}  var5   - Variable 5
 "#
@@ -405,11 +427,11 @@ Description with words
 						name: String::from("var3"),
 						description: String::from("Variable 3"),
 						type_: ParamType::Boolean,
-						optional: false,
+						optional: true,
 					},
 					Param {
-						name: String::from("var4"),
-						description: String::from("Variable 4"),
+						name: String::from("var5"),
+						description: String::from("Variable 5"),
 						type_: ParamType::Object,
 						optional: false,
 					}
@@ -428,7 +450,7 @@ Description with words
 				content,
 				chars: content.char_indices().peekable(),
 			}
-			.find_next("@test"),
+			.consume_until("@test"),
 			Some(6)
 		);
 		assert_eq!(
@@ -436,7 +458,7 @@ Description with words
 				content,
 				chars: content.char_indices().peekable(),
 			}
-			.find_next("@"),
+			.consume_until("@"),
 			Some(6)
 		);
 		assert_eq!(
@@ -444,7 +466,7 @@ Description with words
 				content,
 				chars: content.char_indices().peekable(),
 			}
-			.find_next("t"),
+			.consume_until("t"),
 			Some(1)
 		);
 		assert_eq!(
@@ -452,7 +474,7 @@ Description with words
 				content,
 				chars: content.char_indices().peekable(),
 			}
-			.find_next("te"),
+			.consume_until("te"),
 			Some(7)
 		);
 	}
