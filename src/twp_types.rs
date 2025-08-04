@@ -88,7 +88,7 @@ impl<'a> TwpTypes<'a> {
 				// According to specs at https://shopify.dev/docs/storefronts/themes/tools/liquid-doc
 				// > If you provide multiple descriptions, then only the first one will appear when hovering over a render tag
 				if parser.peek_matches("description") && doc_block.description.is_empty() {
-					parser.consume_chars(12);
+					parser.consume_chars(1 + 11);
 					let start_pos = idx + 12;
 					let end_pos = parser.consume_until("@").unwrap_or(content.len());
 					let mut description = content[start_pos..end_pos].to_string();
@@ -98,7 +98,7 @@ impl<'a> TwpTypes<'a> {
 				}
 
 				if parser.peek_matches("param") {
-					parser.consume_chars(6);
+					parser.consume_chars(1 + 5);
 					parser.consume_whitespace();
 					let mut param = Param::default();
 					let (_, ch) = if let Some((pos, ch)) = parser.chars.peek() {
@@ -113,21 +113,23 @@ impl<'a> TwpTypes<'a> {
 						parser.consume_whitespace();
 						if parser.peek_matches("string") {
 							param.type_ = ParamType::String;
-							parser.consume_chars(7);
+							parser.consume_chars(6);
 						} else if parser.peek_matches("number") {
 							param.type_ = ParamType::Number;
-							parser.consume_chars(7);
+							parser.consume_chars(6);
 						} else if parser.peek_matches("boolean") {
 							param.type_ = ParamType::Boolean;
-							parser.consume_chars(8);
+							parser.consume_chars(7);
 						} else if parser.peek_matches("object") {
 							param.type_ = ParamType::Object;
-							parser.consume_chars(7);
+							parser.consume_chars(6);
 						} else {
-							parser.consume_until("@").unwrap_or(content.len());
+							parser.consume_until("@");
 							continue;
 						}
 					}
+					parser.consume_until("}");
+					parser.chars.next(); // consume '}'
 
 					// optionality
 					parser.consume_whitespace();
@@ -137,10 +139,19 @@ impl<'a> TwpTypes<'a> {
 						continue;
 					};
 					param.optional = optional;
+					if optional {
+						parser.chars.next(); // consume '['
+					}
 
 					// name
+					parser.consume_whitespace();
 					let end_pos = parser.consume_until(" ").unwrap_or(content.len());
-					param.name = content[start_pos..if optional { end_pos - 1 } else { end_pos }].to_string();
+					let includes_bracket = optional && &content[end_pos - 1..end_pos] == "]";
+					param.name = content[start_pos..if includes_bracket { end_pos - 1 } else { end_pos }].trim().to_string();
+					if optional && !includes_bracket {
+						parser.consume_until("]");
+						parser.chars.next(); // consume ']'
+					}
 
 					// description
 					parser.consume_whitespace();
@@ -151,6 +162,18 @@ impl<'a> TwpTypes<'a> {
 					};
 					let end_pos = parser.consume_until("@").unwrap_or(content.len());
 					param.description = content[start_pos..end_pos].trim().to_string();
+
+					// TODO:
+					// - @example
+					// - return Result not Option from parse_doc_content
+					// - for optional params make sure a missing closing bracket isn't breaking code, same for type
+					// - check how Shopify handles:
+					//   - @ characters in description
+					//   - nesting of tags like raw inside a raw
+					//   - raw in example
+					//   - multiline description for params
+					//   - type and description being optional for param
+					//   - different orders for examples descriptions and param
 
 					doc_block.param.push(param);
 				}
@@ -402,10 +425,19 @@ end
 Description with words
 
 @param {string}  [var1] - Optional variable 1
-		@param {number}  var2   - Variable 2
-  @param {boolean} [var3]   - Variable 3
-@param {unknown} var4   - Variable 4
-@param {object}  var5   - Variable 5
+		@param {  number  }  var2   - Variable 2
+  @param {boolean} [ var3  ]   - Variable 3
+@param {unknown}  var4 - Variable 4
+@param {object} var5 Variable 5
+
+  @example
+  {% render 'example-snippet', var1: 'Featured Products', var2: 3, var5: {} %}
+
+@example
+{% render 'example-snippet',
+  var1: variant.price,
+  var5: false
+%}
 "#
 			),
 			Some(DocBlock {
@@ -436,7 +468,9 @@ Description with words
 						optional: false,
 					}
 				],
-				example: String::new()
+				example: String::from(
+					"{% render 'example-snippet', var1: 'Featured Products', var2: 3, var5: {} %}\n{% render 'example-snippet',\n  var1: variant.price,\n  var5: false\n%}"
+				)
 			})
 		);
 	}
