@@ -21,6 +21,7 @@ pub struct DocBlock {
 #[derive(Debug, Serialize, PartialEq, Default)]
 pub enum ParamType {
 	#[default]
+	None,
 	String,
 	Number,
 	Boolean,

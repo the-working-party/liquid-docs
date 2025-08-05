@@ -71,34 +71,28 @@ impl<'a> TwpTypes<'a> {
 		};
 
 		let mut doc_block = DocBlock::default();
-		let mut description = String::new();
 
 		while let Some((idx, ch)) = parser.chars.next() {
 			if doc_block.description.is_empty() && ch != '@' {
-				description.push(ch);
-			}
-
-			if doc_block.description.is_empty() && ch == '@' && !description.is_empty() {
-				let mut taken = std::mem::take(&mut description);
-				Self::trim_in_place(&mut taken);
-				doc_block.description = taken;
+				let end_pos = parser.consume_until_either(&["param", "example", "description"]).unwrap_or(content.len());
+				doc_block.description = content[idx..end_pos].trim().to_string();
 			}
 
 			if ch == '@' {
 				// According to specs at https://shopify.dev/docs/storefronts/themes/tools/liquid-doc
 				// > If you provide multiple descriptions, then only the first one will appear when hovering over a render tag
 				if parser.peek_matches("description") && doc_block.description.is_empty() {
-					parser.consume_chars(1 + 11);
-					let start_pos = idx + 12;
-					let end_pos = parser.consume_until("@").unwrap_or(content.len());
-					let mut description = content[start_pos..end_pos].to_string();
-					Self::trim_in_place(&mut description);
-					doc_block.description = description;
-					parser.consume_chars(end_pos - start_pos);
+					parser.consume_chars(11);
+					parser.consume_whitespace();
+
+					let start_pos = parser.chars.peek().map(|(pos, _)| *pos).unwrap_or(content.len());
+					let end_pos = parser.consume_until_either(&["param", "example", "description"]).unwrap_or(content.len());
+
+					doc_block.description = content[start_pos..end_pos].trim().to_string();
 				}
 
 				if parser.peek_matches("param") {
-					parser.consume_chars(1 + 5);
+					parser.consume_chars(5);
 					parser.consume_whitespace();
 					let mut param = Param::default();
 					let (_, ch) = if let Some((pos, ch)) = parser.chars.peek() {
@@ -107,7 +101,7 @@ impl<'a> TwpTypes<'a> {
 						continue;
 					};
 
-					// type
+					// type (optional)
 					if ch == '{' {
 						parser.chars.next();
 						parser.consume_whitespace();
@@ -127,9 +121,10 @@ impl<'a> TwpTypes<'a> {
 							parser.consume_until("@");
 							continue;
 						}
+
+						parser.consume_until("}");
+						parser.chars.next(); // consume '}'
 					}
-					parser.consume_until("}");
-					parser.chars.next(); // consume '}'
 
 					// optionality
 					parser.consume_whitespace();
@@ -145,6 +140,7 @@ impl<'a> TwpTypes<'a> {
 
 					// name
 					parser.consume_whitespace();
+					// TODO: consume until either " " or "\n"
 					let end_pos = parser.consume_until(" ").unwrap_or(content.len());
 					let includes_bracket = optional && &content[end_pos - 1..end_pos] == "]";
 					param.name = content[start_pos..if includes_bracket { end_pos - 1 } else { end_pos }].trim().to_string();
@@ -160,22 +156,34 @@ impl<'a> TwpTypes<'a> {
 					} else {
 						content.len()
 					};
-					let end_pos = parser.consume_until("@").unwrap_or(content.len());
+					let end_pos = parser.consume_until("\n").unwrap_or(content.len());
 					param.description = content[start_pos..end_pos].trim().to_string();
 
 					// TODO:
-					// - @example
 					// - return Result not Option from parse_doc_content
 					// - for optional params make sure a missing closing bracket isn't breaking code, same for type
 					// - check how Shopify handles:
-					//   - @ characters in description
 					//   - nesting of tags like raw inside a raw
 					//   - raw in example
-					//   - multiline description for params
 					//   - type and description being optional for param
 					//   - different orders for examples descriptions and param
 
 					doc_block.param.push(param);
+				}
+
+				if parser.peek_matches("example") {
+					parser.consume_chars(7);
+					parser.consume_whitespace();
+					let start_pos = if let Some((pos, _)) = parser.chars.peek() {
+						*pos
+					} else {
+						content.len()
+					};
+					let end_pos = parser.consume_until("@").unwrap_or(content.len());
+					if !doc_block.example.is_empty() {
+						doc_block.example.push('\n');
+					}
+					doc_block.example.push_str(&content[start_pos..end_pos].trim().to_string());
 				}
 			}
 		}
@@ -265,6 +273,25 @@ impl<'a> TwpTypes<'a> {
 		None
 	}
 
+	/// Consume until we find @param, @example, or @description
+	fn consume_until_either(&mut self, needle: &[&str]) -> Option<usize> {
+		while let Some((pos, ch)) = self.chars.peek() {
+			if *ch == '@' {
+				// Check what follows without consuming
+				let check_pos = pos + 1;
+				if check_pos < self.content.len() {
+					let remaining = &self.content[check_pos..];
+
+					if needle.iter().any(|&tag| remaining.starts_with(tag)) {
+						return Some(*pos);
+					}
+				}
+			}
+			self.chars.next();
+		}
+		None
+	}
+
 	/// Find the next given tag in the input stream and either return the position before or after the closing tag
 	fn find_tag(&mut self, tag: &str, return_end: bool) -> Option<usize> {
 		while let Some(tag_start) = self.consume_until("{%") {
@@ -302,24 +329,6 @@ impl<'a> TwpTypes<'a> {
 					return;
 				}
 			}
-		}
-	}
-
-	/// Trim leading and trailing whitespace in place without any extra heap allocation
-	fn trim_in_place(s: &mut String) {
-		// Leading whitespace
-		if let Some(first_non_ws) = s.find(|c: char| !c.is_whitespace()) {
-			if first_non_ws > 0 {
-				s.drain(..first_non_ws);
-			}
-		} else {
-			s.clear();
-			return;
-		}
-
-		// Trailing whitespace
-		if let Some(last_non_ws) = s.rfind(|c: char| !c.is_whitespace()) {
-			s.truncate(last_non_ws + 1);
 		}
 	}
 }
@@ -379,7 +388,14 @@ mod tests {
 
 	#[test]
 	fn parse_doc_content_description_test() {
-		assert_eq!(TwpTypes::parse_doc_content("test"), None);
+		assert_eq!(
+			TwpTypes::parse_doc_content("test"),
+			Some(DocBlock {
+				description: String::from("test"),
+				param: Vec::new(),
+				example: String::new()
+			})
+		);
 		assert_eq!(
 			TwpTypes::parse_doc_content(
 				r#"
@@ -422,13 +438,17 @@ end
 		assert_eq!(
 			TwpTypes::parse_doc_content(
 				r#"
-Description with words
+Description with words @ foobar
+end!
 
 @param {string}  [var1] - Optional variable 1
 		@param {  number  }  var2   - Variable 2
+                                  with new line
+end
   @param {boolean} [ var3  ]   - Variable 3
 @param {unknown}  var4 - Variable 4
-@param {object} var5 Variable 5
+  foo @param {object} var5 Variable 5
+  @param var6
 
   @example
   {% render 'example-snippet', var1: 'Featured Products', var2: 3, var5: {} %}
@@ -441,7 +461,7 @@ Description with words
 "#
 			),
 			Some(DocBlock {
-				description: String::from("Description with words"),
+				description: String::from("Description with words @ foobar\nend!"),
 				param: vec![
 					Param {
 						name: String::from("var1"),
@@ -466,7 +486,13 @@ Description with words
 						description: String::from("Variable 5"),
 						type_: ParamType::Object,
 						optional: false,
-					}
+					},
+					Param {
+						name: String::from("var6"),
+						description: String::new(),
+						type_: ParamType::None,
+						optional: false,
+					},
 				],
 				example: String::from(
 					"{% render 'example-snippet', var1: 'Featured Products', var2: 3, var5: {} %}\n{% render 'example-snippet',\n  var1: variant.price,\n  var5: false\n%}"
@@ -510,6 +536,33 @@ Description with words
 			}
 			.consume_until("te"),
 			Some(7)
+		);
+	}
+
+	#[test]
+	fn consume_until_either_test() {
+		let content = "start @param end";
+		assert_eq!(
+			TwpTypes {
+				content,
+				chars: content.char_indices().peekable(),
+			}
+			.consume_until_either(&["param", "example", "description"]),
+			Some(6)
+		);
+
+		let content = r#"
+Description with words @ foobar
+end!
+
+@param {string}  [var1] - Optional variable 1"#;
+		assert_eq!(
+			TwpTypes {
+				content,
+				chars: content.char_indices().peekable(),
+			}
+			.consume_until_either(&["param", "example", "description"]),
+			Some(39)
 		);
 	}
 }
