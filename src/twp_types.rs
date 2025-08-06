@@ -74,7 +74,7 @@ impl<'a> TwpTypes<'a> {
 
 		while let Some((idx, ch)) = parser.chars.next() {
 			if doc_block.description.is_empty() && ch != '@' {
-				let end_pos = parser.consume_until_either(&["param", "example", "description"]).unwrap_or(content.len());
+				let end_pos = parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
 				doc_block.description = content[idx..end_pos].trim().to_string();
 			}
 
@@ -86,7 +86,8 @@ impl<'a> TwpTypes<'a> {
 					parser.consume_whitespace();
 
 					let start_pos = parser.chars.peek().map(|(pos, _)| *pos).unwrap_or(content.len());
-					let end_pos = parser.consume_until_either(&["param", "example", "description"]).unwrap_or(content.len());
+					let end_pos =
+						parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
 
 					doc_block.description = content[start_pos..end_pos].trim().to_string();
 				}
@@ -106,16 +107,16 @@ impl<'a> TwpTypes<'a> {
 						parser.chars.next();
 						parser.consume_whitespace();
 						if parser.peek_matches("string") {
-							param.type_ = ParamType::String;
+							param.type_ = Some(ParamType::String);
 							parser.consume_chars(6);
 						} else if parser.peek_matches("number") {
-							param.type_ = ParamType::Number;
+							param.type_ = Some(ParamType::Number);
 							parser.consume_chars(6);
 						} else if parser.peek_matches("boolean") {
-							param.type_ = ParamType::Boolean;
+							param.type_ = Some(ParamType::Boolean);
 							parser.consume_chars(7);
 						} else if parser.peek_matches("object") {
-							param.type_ = ParamType::Object;
+							param.type_ = Some(ParamType::Object);
 							parser.consume_chars(6);
 						} else {
 							parser.consume_until("@");
@@ -140,8 +141,7 @@ impl<'a> TwpTypes<'a> {
 
 					// name
 					parser.consume_whitespace();
-					// TODO: consume until either " " or "\n"
-					let end_pos = parser.consume_until(" ").unwrap_or(content.len());
+					let end_pos = parser.consume_until_either(&[" ", "\n"]).unwrap_or(content.len());
 					let includes_bracket = optional && &content[end_pos - 1..end_pos] == "]";
 					param.name = content[start_pos..if includes_bracket { end_pos - 1 } else { end_pos }].trim().to_string();
 					if optional && !includes_bracket {
@@ -150,23 +150,22 @@ impl<'a> TwpTypes<'a> {
 					}
 
 					// description
-					parser.consume_whitespace();
-					let start_pos = if let Some((pos, ch)) = parser.chars.peek() {
-						if ch == &'-' { *pos + 1 } else { *pos }
-					} else {
-						content.len()
+					if let Some((_, ch)) = parser.chars.peek() {
+						if ch != &'\n' {
+							parser.consume_whitespace();
+							let start_pos = if let Some((pos, ch)) = parser.chars.peek() {
+								if ch == &'-' { *pos + 1 } else { *pos }
+							} else {
+								content.len()
+							};
+							let end_pos = parser.consume_until("\n").unwrap_or(content.len());
+							param.description = Some(content[start_pos..end_pos].trim().to_string());
+						}
 					};
-					let end_pos = parser.consume_until("\n").unwrap_or(content.len());
-					param.description = content[start_pos..end_pos].trim().to_string();
 
 					// TODO:
 					// - return Result not Option from parse_doc_content
 					// - for optional params make sure a missing closing bracket isn't breaking code, same for type
-					// - check how Shopify handles:
-					//   - nesting of tags like raw inside a raw
-					//   - raw in example
-					//   - type and description being optional for param
-					//   - different orders for examples descriptions and param
 
 					doc_block.param.push(param);
 				}
@@ -273,20 +272,15 @@ impl<'a> TwpTypes<'a> {
 		None
 	}
 
-	/// Consume until we find @param, @example, or @description
-	fn consume_until_either(&mut self, needle: &[&str]) -> Option<usize> {
-		while let Some((pos, ch)) = self.chars.peek() {
-			if *ch == '@' {
-				// Check what follows without consuming
-				let check_pos = pos + 1;
-				if check_pos < self.content.len() {
-					let remaining = &self.content[check_pos..];
+	/// Consume until we find the first needle in the list
+	fn consume_until_either(&mut self, needles: &[&str]) -> Option<usize> {
+		while let Some((pos, _)) = self.chars.peek() {
+			let remaining = &self.content[*pos..];
 
-					if needle.iter().any(|&tag| remaining.starts_with(tag)) {
-						return Some(*pos);
-					}
-				}
+			if needles.iter().any(|&needle| remaining.starts_with(needle)) {
+				return Some(*pos);
 			}
+
 			self.chars.next();
 		}
 		None
@@ -382,7 +376,25 @@ mod tests {
 {{% endif %}}
 "#
 		);
+		assert_eq!(TwpTypes::extract_doc_blocks(&content), Some(vec![doc]));
 
+		let doc = r#"
+  Provides an example of a snippet description.
+
+  @example
+  {% raw %}
+    {% render 'example-snippet', title: 'Featured Products', max_items: 3 %}
+  {% endraw %}
+"#;
+		let content = format!(
+			r#"{{% doc %}}{doc}{{% enddoc %}}
+{{% if article.image %}}
+	<div class="article-card__image">
+		{{% render 'example-snippet', title: 'Featured Products', max_items: 3 %}}
+	</div>
+{{% endif %}}
+"#
+		);
 		assert_eq!(TwpTypes::extract_doc_blocks(&content), Some(vec![doc]));
 	}
 
@@ -445,13 +457,12 @@ end!
 		@param {  number  }  var2   - Variable 2
                                   with new line
 end
+@example
+{% render 'example-snippet', var1: 'Featured Products', var2: 3, var5: {} %}
   @param {boolean} [ var3  ]   - Variable 3
 @param {unknown}  var4 - Variable 4
   foo @param {object} var5 Variable 5
   @param var6
-
-  @example
-  {% render 'example-snippet', var1: 'Featured Products', var2: 3, var5: {} %}
 
 @example
 {% render 'example-snippet',
@@ -465,32 +476,32 @@ end
 				param: vec![
 					Param {
 						name: String::from("var1"),
-						description: String::from("Optional variable 1"),
-						type_: ParamType::String,
+						description: Some(String::from("Optional variable 1")),
+						type_: Some(ParamType::String),
 						optional: true,
 					},
 					Param {
 						name: String::from("var2"),
-						description: String::from("Variable 2"),
-						type_: ParamType::Number,
+						description: Some(String::from("Variable 2")),
+						type_: Some(ParamType::Number),
 						optional: false,
 					},
 					Param {
 						name: String::from("var3"),
-						description: String::from("Variable 3"),
-						type_: ParamType::Boolean,
+						description: Some(String::from("Variable 3")),
+						type_: Some(ParamType::Boolean),
 						optional: true,
 					},
 					Param {
 						name: String::from("var5"),
-						description: String::from("Variable 5"),
-						type_: ParamType::Object,
+						description: Some(String::from("Variable 5")),
+						type_: Some(ParamType::Object),
 						optional: false,
 					},
 					Param {
 						name: String::from("var6"),
-						description: String::new(),
-						type_: ParamType::None,
+						description: None,
+						type_: None,
 						optional: false,
 					},
 				],
@@ -547,7 +558,7 @@ end
 				content,
 				chars: content.char_indices().peekable(),
 			}
-			.consume_until_either(&["param", "example", "description"]),
+			.consume_until_either(&["@param ", "@example ", "@description "]),
 			Some(6)
 		);
 
@@ -561,7 +572,7 @@ end!
 				content,
 				chars: content.char_indices().peekable(),
 			}
-			.consume_until_either(&["param", "example", "description"]),
+			.consume_until_either(&["@param ", "@example ", "@description "]),
 			Some(39)
 		);
 	}

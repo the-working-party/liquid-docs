@@ -21,7 +21,6 @@ pub struct DocBlock {
 #[derive(Debug, Serialize, PartialEq, Default)]
 pub enum ParamType {
 	#[default]
-	None,
 	String,
 	Number,
 	Boolean,
@@ -31,9 +30,9 @@ pub enum ParamType {
 #[derive(Debug, Serialize, PartialEq, Default)]
 pub struct Param {
 	pub name: String,
-	pub description: String,
+	pub description: Option<String>,
 	#[serde(rename = "type")]
-	pub type_: ParamType,
+	pub type_: Option<ParamType>,
 	pub optional: bool,
 }
 
