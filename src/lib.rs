@@ -56,7 +56,7 @@ pub fn parse(input: JsValue) -> Result<JsValue, JsValue> {
 			};
 
 			for block in blocks {
-				if let Some(block_type) = TwpTypes::parse_doc_content(block) {
+				if let Ok(block_type) = TwpTypes::parse_doc_content(block) {
 					liquid_file.liquid_types.push(block_type);
 				}
 			}

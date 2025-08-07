@@ -1,5 +1,13 @@
 use crate::{DocBlock, Param, ParamType};
 
+#[derive(Debug, PartialEq)]
+pub enum ParsingError {
+	MissingParameterName(String),
+	UnknownParameterType(String),
+	UnexpectedParameterEnd(String),
+	NoDocContentFound,
+}
+
 /// The main struct that parses the content of liquid files
 pub struct TwpTypes<'a> {
 	content: &'a str,
@@ -64,7 +72,7 @@ impl<'a> TwpTypes<'a> {
 	}
 
 	/// Parse doc block content
-	pub fn parse_doc_content(content: &'a str) -> Option<DocBlock> {
+	pub fn parse_doc_content(content: &'a str) -> Result<DocBlock, ParsingError> {
 		let mut parser = Self {
 			content,
 			chars: content.char_indices().peekable(),
@@ -72,10 +80,10 @@ impl<'a> TwpTypes<'a> {
 
 		let mut doc_block = DocBlock::default();
 
-		while let Some((idx, ch)) = parser.chars.next() {
+		while let Some((line_start, ch)) = parser.chars.next() {
 			if doc_block.description.is_empty() && ch != '@' {
 				let end_pos = parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
-				doc_block.description = content[idx..end_pos].trim().to_string();
+				doc_block.description = content[line_start..end_pos].trim().to_string();
 			}
 
 			if ch == '@' {
@@ -89,7 +97,9 @@ impl<'a> TwpTypes<'a> {
 					let end_pos =
 						parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
 
-					doc_block.description = content[start_pos..end_pos].trim().to_string();
+					if end_pos > start_pos {
+						doc_block.description = content[start_pos..end_pos].trim().to_string();
+					}
 				}
 
 				if parser.peek_matches("param") {
@@ -99,12 +109,15 @@ impl<'a> TwpTypes<'a> {
 					let (_, ch) = if let Some((pos, ch)) = parser.chars.peek() {
 						(*pos, *ch)
 					} else {
-						continue;
+						return Err(ParsingError::UnexpectedParameterEnd(content[line_start..].to_string()));
 					};
 
 					// type (optional)
 					if ch == '{' {
-						parser.chars.next();
+						if parser.chars.next().is_none() {
+							return Err(ParsingError::UnexpectedParameterEnd(content[line_start..].to_string()));
+						};
+
 						parser.consume_whitespace();
 						if parser.peek_matches("string") {
 							param.type_ = Some(ParamType::String);
@@ -119,8 +132,7 @@ impl<'a> TwpTypes<'a> {
 							param.type_ = Some(ParamType::Object);
 							parser.consume_chars(6);
 						} else {
-							parser.consume_until("@");
-							continue;
+							return Err(ParsingError::UnknownParameterType(content[line_start..].to_string()));
 						}
 
 						parser.consume_until("}");
@@ -132,7 +144,7 @@ impl<'a> TwpTypes<'a> {
 					let (start_pos, optional) = if let Some((pos, ch)) = parser.chars.peek() {
 						if ch == &'[' { (*pos + 1, true) } else { (*pos, false) }
 					} else {
-						continue;
+						return Err(ParsingError::MissingParameterName(content[line_start..].to_string()));
 					};
 					param.optional = optional;
 					if optional {
@@ -144,12 +156,15 @@ impl<'a> TwpTypes<'a> {
 					let end_pos = parser.consume_until_either(&[" ", "\n"]).unwrap_or(content.len());
 					let includes_bracket = optional && &content[end_pos - 1..end_pos] == "]";
 					param.name = content[start_pos..if includes_bracket { end_pos - 1 } else { end_pos }].trim().to_string();
+					if param.name.is_empty() {
+						return Err(ParsingError::MissingParameterName(content[line_start..].to_string()));
+					}
 					if optional && !includes_bracket {
 						parser.consume_until("]");
 						parser.chars.next(); // consume ']'
 					}
 
-					// description
+					// description (optional)
 					if let Some((_, ch)) = parser.chars.peek() {
 						if ch != &'\n' {
 							parser.consume_whitespace();
@@ -159,15 +174,18 @@ impl<'a> TwpTypes<'a> {
 								content.len()
 							};
 							let end_pos = parser.consume_until("\n").unwrap_or(content.len());
-							param.description = Some(content[start_pos..end_pos].trim().to_string());
+							if end_pos > start_pos {
+								param.description = Some(content[start_pos..end_pos].trim().to_string());
+							}
 						}
 					};
 
 					// TODO:
-					// - return Result not Option from parse_doc_content
 					// - for optional params make sure a missing closing bracket isn't breaking code, same for type
 
-					doc_block.param.push(param);
+					if param != Param::default() {
+						doc_block.param.push(param);
+					}
 				}
 
 				if parser.peek_matches("example") {
@@ -182,15 +200,15 @@ impl<'a> TwpTypes<'a> {
 					if !doc_block.example.is_empty() {
 						doc_block.example.push('\n');
 					}
-					doc_block.example.push_str(&content[start_pos..end_pos].trim().to_string());
+					doc_block.example.push_str(content[start_pos..end_pos].trim());
 				}
 			}
 		}
 
 		if doc_block == DocBlock::default() {
-			None
+			Err(ParsingError::NoDocContentFound)
 		} else {
-			Some(doc_block)
+			Ok(doc_block)
 		}
 	}
 
@@ -402,7 +420,7 @@ mod tests {
 	fn parse_doc_content_description_test() {
 		assert_eq!(
 			TwpTypes::parse_doc_content("test"),
-			Some(DocBlock {
+			Ok(DocBlock {
 				description: String::from("test"),
 				param: Vec::new(),
 				example: String::new()
@@ -422,7 +440,7 @@ also with new lines
 end
 "#
 			),
-			Some(DocBlock {
+			Ok(DocBlock {
 				description: String::from("The description 1\n\t\t\tWith new lines\n\t\tand different indentation\nend"),
 				param: Vec::new(),
 				example: String::new()
@@ -437,7 +455,7 @@ also with new lines
 end
 "#
 			),
-			Some(DocBlock {
+			Ok(DocBlock {
 				description: String::from("The description 2\nalso with new lines\n  and some indentation\nend"),
 				param: Vec::new(),
 				example: String::new()
@@ -460,7 +478,6 @@ end
 @example
 {% render 'example-snippet', var1: 'Featured Products', var2: 3, var5: {} %}
   @param {boolean} [ var3  ]   - Variable 3
-@param {unknown}  var4 - Variable 4
   foo @param {object} var5 Variable 5
   @param var6
 
@@ -471,7 +488,7 @@ end
 %}
 "#
 			),
-			Some(DocBlock {
+			Ok(DocBlock {
 				description: String::from("Description with words @ foobar\nend!"),
 				param: vec![
 					Param {
