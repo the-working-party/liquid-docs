@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const glob = require("glob");
 
-const { TwpTypes, help } = require("./pkg/twp_types.js");
+const { parse, help } = require("./pkg/twp_types.js");
 
 const args = process.argv;
 const file_path = args[2] || "./*.liquid";
@@ -31,5 +31,5 @@ const file_contents = files.map((file_path) => ({
 	content: fs.readFileSync(path.join(process.cwd(), file_path), "utf8"),
 }));
 
-const liquid_types = TwpTypes.parse(file_contents);
-console.log(liquid_types);
+const liquid_types = parse(file_contents);
+console.log(JSON.stringify(liquid_types, null, 2));

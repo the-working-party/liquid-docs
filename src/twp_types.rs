@@ -3,6 +3,7 @@ use crate::{DocBlock, Param, ParamType};
 #[derive(Debug, PartialEq)]
 pub enum ParsingError {
 	MissingParameterName(String),
+	MissingOptionalClosingBracket(String),
 	UnknownParameterType(String),
 	UnexpectedParameterEnd(String),
 	NoDocContentFound,
@@ -153,18 +154,25 @@ impl<'a> TwpTypes<'a> {
 
 					// name
 					parser.consume_whitespace();
-					let end_pos = parser.consume_until_either(&[" ", "\n"]).unwrap_or(content.len());
-					let includes_bracket = optional && &content[end_pos - 1..end_pos] == "]";
-					param.name = content[start_pos..if includes_bracket { end_pos - 1 } else { end_pos }].trim().to_string();
+					let end_pos = if optional {
+						parser
+							.consume_until("]")
+							.ok_or(ParsingError::MissingOptionalClosingBracket(content[line_start..].to_string()))?
+					} else {
+						parser.consume_until_either(&[" ", "\n"]).unwrap_or(content.len())
+					};
+					param.name = content[start_pos..end_pos].trim().to_string();
+					if optional {
+						parser.chars.next(); // consume ']'
+					}
 					if param.name.is_empty() {
 						return Err(ParsingError::MissingParameterName(content[line_start..].to_string()));
 					}
-					if optional && !includes_bracket {
-						parser.consume_until("]");
-						parser.chars.next(); // consume ']'
+					if param.name.contains('\n') {
+						return Err(ParsingError::MissingOptionalClosingBracket(content[line_start..].to_string()));
 					}
 
-					// description (optional)
+					// param description (optional)
 					if let Some((_, ch)) = parser.chars.peek() {
 						if ch != &'\n' {
 							parser.consume_whitespace();
@@ -180,9 +188,6 @@ impl<'a> TwpTypes<'a> {
 						}
 					};
 
-					// TODO:
-					// - for optional params make sure a missing closing bracket isn't breaking code, same for type
-
 					if param != Param::default() {
 						doc_block.param.push(param);
 					}
@@ -196,7 +201,8 @@ impl<'a> TwpTypes<'a> {
 					} else {
 						content.len()
 					};
-					let end_pos = parser.consume_until("@").unwrap_or(content.len());
+					let end_pos =
+						parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
 					if !doc_block.example.is_empty() {
 						doc_block.example.push('\n');
 					}
@@ -214,7 +220,7 @@ impl<'a> TwpTypes<'a> {
 
 	/// Move the cursor to the next non-whitespace character
 	fn consume_whitespace(&mut self) {
-		while self.chars.peek().map(|(_, ch)| ch.is_whitespace()).unwrap_or(false) {
+		while self.chars.peek().map(|(_, ch)| ch.is_whitespace() && ch != &'\n').unwrap_or(false) {
 			self.chars.next();
 		}
 	}
@@ -464,7 +470,7 @@ end
 	}
 
 	#[test]
-	fn parse_doc_content_param_test() {
+	fn parse_doc_content_param_complex_test() {
 		assert_eq!(
 			TwpTypes::parse_doc_content(
 				r#"
@@ -526,6 +532,210 @@ end
 					"{% render 'example-snippet', var1: 'Featured Products', var2: 3, var5: {} %}\n{% render 'example-snippet',\n  var1: variant.price,\n  var5: false\n%}"
 				)
 			})
+		);
+
+		assert_eq!(
+			TwpTypes::parse_doc_content(
+				r#"
+  Intended for use @description foo in a block similar to the button block.
+  more lines here
+  end
+
+  @param {string} link - link to render
+  @example
+  {% raw %}
+    {% render 'button', link: '@/collections/all' %}
+    sadsad @param asdasd
+  {% endraw %}
+
+  test @param { object    } [     block] - The block @param things and what not
+  @param [foo]
+
+  @description testing
+
+  @example
+  {% render 'button', link: '/collections/all' %}
+"#
+			),
+			Ok(DocBlock {
+				description: String::from("Intended for use"),
+				param: vec![
+					Param {
+						name: String::from("link"),
+						description: Some(String::from("link to render")),
+						type_: Some(ParamType::String),
+						optional: false,
+					},
+					Param {
+						name: String::from("asdasd"),
+						description: None,
+						type_: None,
+						optional: false,
+					},
+					Param {
+						name: String::from("block"),
+						description: Some(String::from("The block @param things and what not")),
+						type_: Some(ParamType::Object),
+						optional: true,
+					},
+					Param {
+						name: String::from("foo"),
+						description: None,
+						type_: None,
+						optional: true,
+					},
+				],
+				example: String::from(
+					"{% raw %}\n    {% render 'button', link: '@/collections/all' %}\n    sadsad\n{% render 'button', link: '/collections/all' %}"
+				)
+			})
+		);
+
+		assert_eq!(
+			TwpTypes::parse_doc_content(
+				r#"
+Intended for use @ description foo in a block similar to the button block.
+  more lines here
+  end
+
+  @param {string} link - link to render
+  @example
+  {% raw %}
+    {% render 'button', link: '@/collections/all' %}
+    sadsad @ param asdasd
+  {% endraw %}
+
+  test @param { object    } [     block] - The block @param things and what not
+  @param [foo]
+
+  @description testing
+
+  @example
+  {% render 'button', link: '/collections/all' %}
+"#
+			),
+			Ok(DocBlock {
+				description: String::from(
+					"Intended for use @ description foo in a block similar to the button block.\n  more lines here\n  end"
+				),
+				param: vec![
+					Param {
+						name: String::from("link"),
+						description: Some(String::from("link to render")),
+						type_: Some(ParamType::String),
+						optional: false,
+					},
+					Param {
+						name: String::from("block"),
+						description: Some(String::from("The block @param things and what not")),
+						type_: Some(ParamType::Object),
+						optional: true,
+					},
+					Param {
+						name: String::from("foo"),
+						description: None,
+						type_: None,
+						optional: true,
+					},
+				],
+				example: String::from(
+					"{% raw %}\n    {% render 'button', link: '@/collections/all' %}\n    sadsad @ param asdasd\n  {% endraw %}\n\n  test\n{% render 'button', link: '/collections/all' %}"
+				)
+			})
+		);
+	}
+
+	#[test]
+	fn parse_doc_content_param_param_test() {
+		assert_eq!(
+			TwpTypes::parse_doc_content("@param foo"),
+			Ok(DocBlock {
+				description: String::new(),
+				param: vec![Param {
+					name: String::from("foo"),
+					description: None,
+					type_: None,
+					optional: false,
+				},],
+				example: String::new()
+			})
+		);
+
+		assert_eq!(
+			TwpTypes::parse_doc_content("Description with words\n@param foo bar"),
+			Ok(DocBlock {
+				description: String::from("Description with words"),
+				param: vec![Param {
+					name: String::from("foo"),
+					description: Some(String::from("bar")),
+					type_: None,
+					optional: false,
+				},],
+				example: String::new()
+			})
+		);
+
+		assert_eq!(
+			TwpTypes::parse_doc_content("Description with words\n@param {string} foo bar"),
+			Ok(DocBlock {
+				description: String::from("Description with words"),
+				param: vec![Param {
+					name: String::from("foo"),
+					description: Some(String::from("bar")),
+					type_: Some(ParamType::String),
+					optional: false,
+				},],
+				example: String::new()
+			})
+		);
+
+		assert_eq!(
+			TwpTypes::parse_doc_content("Description with words\n@param {string} [foo] bar"),
+			Ok(DocBlock {
+				description: String::from("Description with words"),
+				param: vec![Param {
+					name: String::from("foo"),
+					description: Some(String::from("bar")),
+					type_: Some(ParamType::String),
+					optional: true,
+				},],
+				example: String::new()
+			})
+		);
+	}
+
+	#[test]
+	fn parse_doc_content_param_error_test() {
+		assert_eq!(
+			TwpTypes::parse_doc_content("Description with words\n @param {unknown} foo - bar\n\n end\n"),
+			Err(ParsingError::UnknownParameterType(String::from("@param {unknown} foo - bar\n\n end\n")))
+		);
+
+		assert_eq!(
+			TwpTypes::parse_doc_content("Description with words\n @param \n"),
+			Err(ParsingError::MissingParameterName(String::from("@param \n")))
+		);
+
+		assert_eq!(
+			TwpTypes::parse_doc_content("Description with words\n @param \n @param foo"),
+			Err(ParsingError::MissingParameterName(String::from("@param \n @param foo")))
+		);
+
+		assert_eq!(
+			TwpTypes::parse_doc_content("Description with words\n @param "),
+			Err(ParsingError::UnexpectedParameterEnd(String::from("@param ")))
+		);
+
+		assert_eq!(TwpTypes::parse_doc_content(""), Err(ParsingError::NoDocContentFound));
+
+		assert_eq!(
+			TwpTypes::parse_doc_content("Description with words\n @param [foo bar"),
+			Err(ParsingError::MissingOptionalClosingBracket(String::from("@param [foo bar")))
+		);
+
+		assert_eq!(
+			TwpTypes::parse_doc_content("Description with words\n @param {string foo bar"),
+			Err(ParsingError::MissingParameterName(String::from("@param {string foo bar")))
 		);
 	}
 
