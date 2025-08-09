@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const glob = require("glob");
 
-const { parse, help } = require("./pkg/twp_types.js");
+const { parse_files, help } = require("./pkg/twp_types.js");
 
 const args = process.argv;
 const file_path = args[2] || "./*.liquid";
@@ -20,7 +20,7 @@ if (!file_path || args.includes("-h") || args.includes("--help")) {
 }
 
 if (args.includes("-v") || args.includes("-V") || args.includes("--version")) {
-	const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+	const pkg = JSON.parse_files(fs.readFileSync("package.json", "utf8"));
 	console.log(`v${pkg.version}`);
 	process.exit(0);
 }

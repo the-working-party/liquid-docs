@@ -43,7 +43,7 @@ struct FileInput {
 }
 
 #[wasm_bindgen]
-pub fn parse(input: JsValue) -> Result<JsValue, JsValue> {
+pub fn parse_files(input: JsValue) -> Result<JsValue, JsValue> {
 	let files: Vec<FileInput> = serde_wasm_bindgen::from_value(input).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
 	let mut all_files = Vec::with_capacity(files.len());
@@ -66,6 +66,19 @@ pub fn parse(input: JsValue) -> Result<JsValue, JsValue> {
 	}
 
 	serde_wasm_bindgen::to_value(&all_files).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+#[wasm_bindgen]
+pub fn parse(input: String) -> Result<JsValue, JsValue> {
+	let mut liquid_types = Vec::new();
+	if let Some(blocks) = TwpTypes::extract_doc_blocks(&input) {
+		for block in blocks {
+			if let Ok(block_type) = TwpTypes::parse_doc_content(block) {
+				liquid_types.push(block_type);
+			}
+		}
+	}
+	serde_wasm_bindgen::to_value(&liquid_types).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 #[wasm_bindgen]

@@ -1,6 +1,8 @@
+use serde::Serialize;
+
 use crate::{DocBlock, Param, ParamType};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub enum ParsingError {
 	MissingParameterName(String),
 	MissingOptionalClosingBracket(String),
@@ -99,7 +101,11 @@ impl<'a> TwpTypes<'a> {
 						parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
 
 					if end_pos > start_pos {
-						doc_block.description = content[start_pos..end_pos].trim().to_string();
+						if content[start_pos..end_pos].trim().starts_with('-') {
+							doc_block.description = content[start_pos + 1..end_pos].trim().to_string();
+						} else {
+							doc_block.description = content[start_pos..end_pos].trim().to_string();
+						}
 					}
 				}
 
@@ -432,6 +438,7 @@ mod tests {
 				example: String::new()
 			})
 		);
+
 		assert_eq!(
 			TwpTypes::parse_doc_content(
 				r#"
@@ -452,6 +459,7 @@ end
 				example: String::new()
 			})
 		);
+
 		assert_eq!(
 			TwpTypes::parse_doc_content(
 				r#"
@@ -463,6 +471,15 @@ end
 			),
 			Ok(DocBlock {
 				description: String::from("The description 2\nalso with new lines\n  and some indentation\nend"),
+				param: Vec::new(),
+				example: String::new()
+			})
+		);
+
+		assert_eq!(
+			TwpTypes::parse_doc_content("@description - The description 3"),
+			Ok(DocBlock {
+				description: String::from("The description 3"),
 				param: Vec::new(),
 				example: String::new()
 			})
