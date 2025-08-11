@@ -1,9 +1,9 @@
-mod twp_types;
+mod liquid_docs;
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-use twp_types::TwpTypes;
+use liquid_docs::LiquidDocs;
 
 #[derive(Debug, Serialize)]
 pub struct LiquidFile {
@@ -49,11 +49,11 @@ pub fn parse_files(input: JsValue) -> Result<JsValue, JsValue> {
 	let mut all_files = Vec::with_capacity(files.len());
 
 	for file in files {
-		if let Some(blocks) = TwpTypes::extract_doc_blocks(&file.content) {
+		if let Some(blocks) = LiquidDocs::extract_doc_blocks(&file.content) {
 			let mut liquid_types = Vec::with_capacity(blocks.len());
 
 			for block in blocks {
-				if let Ok(block_type) = TwpTypes::parse_doc_content(block) {
+				if let Ok(block_type) = LiquidDocs::parse_doc_content(block) {
 					liquid_types.push(block_type);
 				}
 			}
@@ -76,9 +76,9 @@ pub fn parse_files(input: JsValue) -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 pub fn parse(input: String) -> Result<JsValue, JsValue> {
 	let mut liquid_types = Vec::new();
-	if let Some(blocks) = TwpTypes::extract_doc_blocks(&input) {
+	if let Some(blocks) = LiquidDocs::extract_doc_blocks(&input) {
 		for block in blocks {
-			if let Ok(block_type) = TwpTypes::parse_doc_content(block) {
+			if let Ok(block_type) = LiquidDocs::parse_doc_content(block) {
 				liquid_types.push(block_type);
 			}
 		}

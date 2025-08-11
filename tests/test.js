@@ -1,4 +1,4 @@
-const { parse } = require("./pkg/twp_types.js");
+const { parse } = require("../pkg/twp_types.js");
 
 const TESTS = [
 	{

@@ -1,9 +1,9 @@
 [package]
-name = "twp-types"
+name = "liquid-docs"
 version = "1.0.0"
 edition = "2024"
 authors = ["Dominik Wilkowski <hi@dominik-wilkowski.com>"]
-description = "A CLI tool to process liquid files using Rust/WASM"
+description = "A parser for Shopify liquid doc tags using Rust/WASM"
 license = "MIT"
 
 [lib]

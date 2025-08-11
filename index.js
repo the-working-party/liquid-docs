@@ -26,14 +26,14 @@ module.exports = {
 function help() {
 	const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 	console.log(`
- ▀█▀ █ █ █ █▀█ ▄▄ ▀█▀ █▄█ █▀█ █▀▀ █▀▀
-  █  ▀▄▀▄▀ █▀▀     █   █  █▀▀ ██▄ ▄▄█ v${pkg.version}
+ █   █ █▀█ █ █ █ █▀▄   █▀▄ █▀█ █▀▀ █▀▀
+ █▄▄ █ ▀▀█ █▄█ █ █▄▀   █▄▀ █▄█ █▄▄ ▄▄█ v${pkg.version}
 
 A parser for Shopify liquid doc tags
 https://shopify.dev/docs/storefronts/themes/tools/liquid-doc
 
 Usage:
-  twp-types <path>
+  liquid-docs-check <path>
 
 Description:
   Tests all Shopify Liquid files for the existence of {% doc %} tags.
@@ -47,8 +47,8 @@ Options:
   -v, --version  Show version information and exit.
 
 Examples:
-  twp-types "{snippets,docs}/*.liquid"
-  twp-types "path/to/snippets/*.liquid"
+  liquid-docs-check "{snippets,docs}/*.liquid"
+  liquid-docs-check "path/to/snippets/*.liquid"
 `);
 }
 

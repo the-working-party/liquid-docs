@@ -12,12 +12,12 @@ pub enum ParsingError {
 }
 
 /// The main struct that parses the content of liquid files
-pub struct TwpTypes<'a> {
+pub struct LiquidDocs<'a> {
 	content: &'a str,
 	chars: std::iter::Peekable<std::str::CharIndices<'a>>,
 }
 
-impl<'a> TwpTypes<'a> {
+impl<'a> LiquidDocs<'a> {
 	/// Extract a collection of all doc blocks from the given content without the wrapping doc tag
 	pub fn extract_doc_blocks(content: &'a str) -> Option<Vec<&'a str>> {
 		// This may find more than just the closing tags for our doc blocks which means we sometimes may not return early
@@ -363,29 +363,29 @@ mod tests {
 
 	#[test]
 	fn extract_doc_blocks_test() {
-		assert_eq!(TwpTypes::extract_doc_blocks("test"), None);
-		assert_eq!(TwpTypes::extract_doc_blocks("{% doc %}test{% enddoc %}test"), Some(vec!["test"]));
-		assert_eq!(TwpTypes::extract_doc_blocks("{%- doc %}test{% enddoc %}test"), Some(vec!["test"]));
-		assert_eq!(TwpTypes::extract_doc_blocks("{%- doc -%}test{% enddoc %}test"), Some(vec!["test"]));
-		assert_eq!(TwpTypes::extract_doc_blocks("{%- doc -%}test{%- enddoc %}test"), Some(vec!["test"]));
-		assert_eq!(TwpTypes::extract_doc_blocks("{%- doc -%}test{%- enddoc -%}test"), Some(vec!["test"]));
-		assert_eq!(TwpTypes::extract_doc_blocks("{% doc %}test{% enddoc1 %}test"), None);
+		assert_eq!(LiquidDocs::extract_doc_blocks("test"), None);
+		assert_eq!(LiquidDocs::extract_doc_blocks("{% doc %}test{% enddoc %}test"), Some(vec!["test"]));
+		assert_eq!(LiquidDocs::extract_doc_blocks("{%- doc %}test{% enddoc %}test"), Some(vec!["test"]));
+		assert_eq!(LiquidDocs::extract_doc_blocks("{%- doc -%}test{% enddoc %}test"), Some(vec!["test"]));
+		assert_eq!(LiquidDocs::extract_doc_blocks("{%- doc -%}test{%- enddoc %}test"), Some(vec!["test"]));
+		assert_eq!(LiquidDocs::extract_doc_blocks("{%- doc -%}test{%- enddoc -%}test"), Some(vec!["test"]));
+		assert_eq!(LiquidDocs::extract_doc_blocks("{% doc %}test{% enddoc1 %}test"), None);
 		assert_eq!(
-			TwpTypes::extract_doc_blocks(
+			LiquidDocs::extract_doc_blocks(
 				"{% doc %}block1\n  line1\n  line2\n  line3\n\n{% enddoc %}test\n{% doc %}block2{% enddoc %}"
 			),
 			Some(vec!["block1\n  line1\n  line2\n  line3\n\n", "block2"])
 		);
-		assert_eq!(TwpTypes::extract_doc_blocks("{% doc %}\n\ntest{% enddoc %}\n\ntest"), Some(vec!["\n\ntest"]));
+		assert_eq!(LiquidDocs::extract_doc_blocks("{% doc %}\n\ntest{% enddoc %}\n\ntest"), Some(vec!["\n\ntest"]));
 		assert_eq!(
-			TwpTypes::extract_doc_blocks("{%       doc  %}  test {%  enddoc         %} test"),
+			LiquidDocs::extract_doc_blocks("{%       doc  %}  test {%  enddoc         %} test"),
 			Some(vec!["  test "])
 		);
-		assert_eq!(TwpTypes::extract_doc_blocks("{%doc%}test{%enddoc%}test"), Some(vec!["test"]));
-		assert_eq!(TwpTypes::extract_doc_blocks("{% raw %}{% doc %}test{% enddoc %}{% endraw %}test"), None);
-		assert_eq!(TwpTypes::extract_doc_blocks("{% raw %}{% doc %}test{% enddoc %}{% endraw %}test"), None);
-		assert_eq!(TwpTypes::extract_doc_blocks("{% comment %}{% doc %}test{% enddoc %}{% endcomment %}test"), None);
-		assert_eq!(TwpTypes::extract_doc_blocks("{% doc %}{% enddoc %}"), Some(vec![""]));
+		assert_eq!(LiquidDocs::extract_doc_blocks("{%doc%}test{%enddoc%}test"), Some(vec!["test"]));
+		assert_eq!(LiquidDocs::extract_doc_blocks("{% raw %}{% doc %}test{% enddoc %}{% endraw %}test"), None);
+		assert_eq!(LiquidDocs::extract_doc_blocks("{% raw %}{% doc %}test{% enddoc %}{% endraw %}test"), None);
+		assert_eq!(LiquidDocs::extract_doc_blocks("{% comment %}{% doc %}test{% enddoc %}{% endcomment %}test"), None);
+		assert_eq!(LiquidDocs::extract_doc_blocks("{% doc %}{% enddoc %}"), Some(vec![""]));
 
 		let doc = r#"
   Provides an example of a snippet description.
@@ -406,7 +406,7 @@ mod tests {
 {{% endif %}}
 "#
 		);
-		assert_eq!(TwpTypes::extract_doc_blocks(&content), Some(vec![doc]));
+		assert_eq!(LiquidDocs::extract_doc_blocks(&content), Some(vec![doc]));
 
 		let doc = r#"
   Provides an example of a snippet description.
@@ -425,13 +425,13 @@ mod tests {
 {{% endif %}}
 "#
 		);
-		assert_eq!(TwpTypes::extract_doc_blocks(&content), Some(vec![doc]));
+		assert_eq!(LiquidDocs::extract_doc_blocks(&content), Some(vec![doc]));
 	}
 
 	#[test]
 	fn parse_doc_content_description_test() {
 		assert_eq!(
-			TwpTypes::parse_doc_content("test"),
+			LiquidDocs::parse_doc_content("test"),
 			Ok(DocBlock {
 				description: String::from("test"),
 				param: Vec::new(),
@@ -440,7 +440,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			TwpTypes::parse_doc_content(
+			LiquidDocs::parse_doc_content(
 				r#"
 			The description 1
 			With new lines
@@ -461,7 +461,7 @@ end
 		);
 
 		assert_eq!(
-			TwpTypes::parse_doc_content(
+			LiquidDocs::parse_doc_content(
 				r#"
 @description The description 2
 also with new lines
@@ -477,7 +477,7 @@ end
 		);
 
 		assert_eq!(
-			TwpTypes::parse_doc_content("@description - The description 3"),
+			LiquidDocs::parse_doc_content("@description - The description 3"),
 			Ok(DocBlock {
 				description: String::from("The description 3"),
 				param: Vec::new(),
@@ -489,7 +489,7 @@ end
 	#[test]
 	fn parse_doc_content_param_complex_test() {
 		assert_eq!(
-			TwpTypes::parse_doc_content(
+			LiquidDocs::parse_doc_content(
 				r#"
 Description with words @ foobar
 end!
@@ -552,7 +552,7 @@ end
 		);
 
 		assert_eq!(
-			TwpTypes::parse_doc_content(
+			LiquidDocs::parse_doc_content(
 				r#"
   Intended for use @description foo in a block similar to the button block.
   more lines here
@@ -609,7 +609,7 @@ end
 		);
 
 		assert_eq!(
-			TwpTypes::parse_doc_content(
+			LiquidDocs::parse_doc_content(
 				r#"
 Intended for use @ description foo in a block similar to the button block.
   more lines here
@@ -665,7 +665,7 @@ Intended for use @ description foo in a block similar to the button block.
 	#[test]
 	fn parse_doc_content_param_param_test() {
 		assert_eq!(
-			TwpTypes::parse_doc_content("@param foo"),
+			LiquidDocs::parse_doc_content("@param foo"),
 			Ok(DocBlock {
 				description: String::new(),
 				param: vec![Param {
@@ -679,7 +679,7 @@ Intended for use @ description foo in a block similar to the button block.
 		);
 
 		assert_eq!(
-			TwpTypes::parse_doc_content("Description with words\n@param foo bar"),
+			LiquidDocs::parse_doc_content("Description with words\n@param foo bar"),
 			Ok(DocBlock {
 				description: String::from("Description with words"),
 				param: vec![Param {
@@ -693,7 +693,7 @@ Intended for use @ description foo in a block similar to the button block.
 		);
 
 		assert_eq!(
-			TwpTypes::parse_doc_content("Description with words\n@param {string} foo bar"),
+			LiquidDocs::parse_doc_content("Description with words\n@param {string} foo bar"),
 			Ok(DocBlock {
 				description: String::from("Description with words"),
 				param: vec![Param {
@@ -707,7 +707,7 @@ Intended for use @ description foo in a block similar to the button block.
 		);
 
 		assert_eq!(
-			TwpTypes::parse_doc_content("Description with words\n@param {string} [foo] bar"),
+			LiquidDocs::parse_doc_content("Description with words\n@param {string} [foo] bar"),
 			Ok(DocBlock {
 				description: String::from("Description with words"),
 				param: vec![Param {
@@ -724,34 +724,34 @@ Intended for use @ description foo in a block similar to the button block.
 	#[test]
 	fn parse_doc_content_param_error_test() {
 		assert_eq!(
-			TwpTypes::parse_doc_content("Description with words\n @param {unknown} foo - bar\n\n end\n"),
+			LiquidDocs::parse_doc_content("Description with words\n @param {unknown} foo - bar\n\n end\n"),
 			Err(ParsingError::UnknownParameterType(String::from("@param {unknown} foo - bar\n\n end\n")))
 		);
 
 		assert_eq!(
-			TwpTypes::parse_doc_content("Description with words\n @param \n"),
+			LiquidDocs::parse_doc_content("Description with words\n @param \n"),
 			Err(ParsingError::MissingParameterName(String::from("@param \n")))
 		);
 
 		assert_eq!(
-			TwpTypes::parse_doc_content("Description with words\n @param \n @param foo"),
+			LiquidDocs::parse_doc_content("Description with words\n @param \n @param foo"),
 			Err(ParsingError::MissingParameterName(String::from("@param \n @param foo")))
 		);
 
 		assert_eq!(
-			TwpTypes::parse_doc_content("Description with words\n @param "),
+			LiquidDocs::parse_doc_content("Description with words\n @param "),
 			Err(ParsingError::UnexpectedParameterEnd(String::from("@param ")))
 		);
 
-		assert_eq!(TwpTypes::parse_doc_content(""), Err(ParsingError::NoDocContentFound));
+		assert_eq!(LiquidDocs::parse_doc_content(""), Err(ParsingError::NoDocContentFound));
 
 		assert_eq!(
-			TwpTypes::parse_doc_content("Description with words\n @param [foo bar"),
+			LiquidDocs::parse_doc_content("Description with words\n @param [foo bar"),
 			Err(ParsingError::MissingOptionalClosingBracket(String::from("@param [foo bar")))
 		);
 
 		assert_eq!(
-			TwpTypes::parse_doc_content("Description with words\n @param {string foo bar"),
+			LiquidDocs::parse_doc_content("Description with words\n @param {string foo bar"),
 			Err(ParsingError::MissingParameterName(String::from("@param {string foo bar")))
 		);
 	}
@@ -761,7 +761,7 @@ Intended for use @ description foo in a block similar to the button block.
 		let content = "start @test end";
 
 		assert_eq!(
-			TwpTypes {
+			LiquidDocs {
 				content,
 				chars: content.char_indices().peekable(),
 			}
@@ -769,7 +769,7 @@ Intended for use @ description foo in a block similar to the button block.
 			Some(6)
 		);
 		assert_eq!(
-			TwpTypes {
+			LiquidDocs {
 				content,
 				chars: content.char_indices().peekable(),
 			}
@@ -777,7 +777,7 @@ Intended for use @ description foo in a block similar to the button block.
 			Some(6)
 		);
 		assert_eq!(
-			TwpTypes {
+			LiquidDocs {
 				content,
 				chars: content.char_indices().peekable(),
 			}
@@ -785,7 +785,7 @@ Intended for use @ description foo in a block similar to the button block.
 			Some(1)
 		);
 		assert_eq!(
-			TwpTypes {
+			LiquidDocs {
 				content,
 				chars: content.char_indices().peekable(),
 			}
@@ -798,7 +798,7 @@ Intended for use @ description foo in a block similar to the button block.
 	fn consume_until_either_test() {
 		let content = "start @param end";
 		assert_eq!(
-			TwpTypes {
+			LiquidDocs {
 				content,
 				chars: content.char_indices().peekable(),
 			}
@@ -812,7 +812,7 @@ end!
 
 @param {string}  [var1] - Optional variable 1"#;
 		assert_eq!(
-			TwpTypes {
+			LiquidDocs {
 				content,
 				chars: content.char_indices().peekable(),
 			}

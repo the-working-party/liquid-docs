@@ -25,6 +25,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "liquid-docs"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde-wasm-bindgen",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "log"
 version = "0.4.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -100,16 +110,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "twp-types"
-version = "1.0.0"
-dependencies = [
- "serde",
- "serde-wasm-bindgen",
- "wasm-bindgen",
- "web-sys",
 ]
 
 [[package]]
