@@ -13,7 +13,7 @@ A parser for [Shopify liquid doc tags](https://shopify.dev/docs/storefronts/them
 
 - [Parser](#parser)
 - [Checker](#checker)
-- [Docs Builder](#docs-builder)
+- [Builder](#builder)
 - [Contribution](#contribution)
 - [License](#license)
 
@@ -123,7 +123,7 @@ Checking files...
 Found 1 liquid file without doc tags
 ```
 
-## Docs Builder
+## Builder
 
 TODO
 
