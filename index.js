@@ -47,7 +47,7 @@ Options:
   -v, --version  Show version information and exit.
 
 Examples:
-  liquid-docs-check "{snippets,docs}/*.liquid"
+  liquid-docs-check "{blocks,snippets}/*.liquid"
   liquid-docs-check "path/to/snippets/*.liquid"
 `);
 }

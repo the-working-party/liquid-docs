@@ -2,6 +2,7 @@ use serde::Serialize;
 
 use crate::{DocBlock, Param, ParamType};
 
+/// The error types our [LiquidDocs] methods could throw
 #[derive(Debug, PartialEq, Serialize)]
 pub enum ParsingError {
 	MissingParameterName(String),
