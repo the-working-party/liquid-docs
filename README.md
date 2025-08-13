@@ -1,13 +1,15 @@
-<p align="center">
-	<img src="assets/logo.png" alt="Liquid Docs Logo" width="180" height="180">
-</p>
+<img src="assets/logo.png" alt="Liquid Docs Logo" width="180" height="180" align="left">
 
 ```
  █   █ █▀█ █ █ █ █▀▄   █▀▄ █▀█ █▀▀ █▀▀
  █▄▄ █ ▀▀█ █▄█ █ █▄▀   █▄▀ █▄█ █▄▄ ▄▄█
 ```
 
-A parser for [Shopify liquid doc tags](https://shopify.dev/docs/storefronts/themes/tools/liquid-doc).
+A parser for [Shopify liquid doc tags](https://shopify.dev/docs/storefronts/themes/tools/liquid-doc)
+that allows you to extract the `{% doc %}` content of a liquid file into an object, check liquid files
+to make sure they all have a doc block and auto generate a doc site for all your liquid files.
+
+<br>
 
 ## Content
 

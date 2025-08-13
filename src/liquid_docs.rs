@@ -84,7 +84,9 @@ impl<'a> LiquidDocs<'a> {
 
 		let mut doc_block = DocBlock::default();
 
+		parser.consume_whitespace();
 		while let Some((line_start, ch)) = parser.chars.next() {
+			// description without @description
 			if doc_block.description.is_empty() && ch != '@' {
 				let end_pos = parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
 				doc_block.description = content[line_start..end_pos].trim().to_string();
@@ -110,9 +112,10 @@ impl<'a> LiquidDocs<'a> {
 					}
 				}
 
+				// @param
 				if parser.peek_matches("param") {
 					parser.consume_chars(5);
-					parser.consume_whitespace();
+					parser.consume_whitespace_until_newline();
 					let mut param = Param::default();
 					let (_, ch) = if let Some((pos, ch)) = parser.chars.peek() {
 						(*pos, *ch)
@@ -120,13 +123,13 @@ impl<'a> LiquidDocs<'a> {
 						return Err(ParsingError::UnexpectedParameterEnd(content[line_start..].to_string()));
 					};
 
-					// type (optional)
+					// @param type (optional)
 					if ch == '{' {
 						if parser.chars.next().is_none() {
 							return Err(ParsingError::UnexpectedParameterEnd(content[line_start..].to_string()));
 						};
 
-						parser.consume_whitespace();
+						parser.consume_whitespace_until_newline();
 						if parser.peek_matches("string") {
 							param.type_ = Some(ParamType::String);
 							parser.consume_chars(6);
@@ -147,8 +150,8 @@ impl<'a> LiquidDocs<'a> {
 						parser.chars.next(); // consume '}'
 					}
 
-					// optionality
-					parser.consume_whitespace();
+					// @param optionality
+					parser.consume_whitespace_until_newline();
 					let (start_pos, optional) = if let Some((pos, ch)) = parser.chars.peek() {
 						if ch == &'[' { (*pos + 1, true) } else { (*pos, false) }
 					} else {
@@ -159,8 +162,8 @@ impl<'a> LiquidDocs<'a> {
 						parser.chars.next(); // consume '['
 					}
 
-					// name
-					parser.consume_whitespace();
+					// @param name
+					parser.consume_whitespace_until_newline();
 					let end_pos = if optional {
 						parser
 							.consume_until("]")
@@ -179,10 +182,10 @@ impl<'a> LiquidDocs<'a> {
 						return Err(ParsingError::MissingOptionalClosingBracket(content[line_start..].to_string()));
 					}
 
-					// param description (optional)
+					// @param description (optional)
 					if let Some((_, ch)) = parser.chars.peek() {
 						if ch != &'\n' {
-							parser.consume_whitespace();
+							parser.consume_whitespace_until_newline();
 							let start_pos = if let Some((pos, ch)) = parser.chars.peek() {
 								if ch == &'-' { *pos + 1 } else { *pos }
 							} else {
@@ -200,9 +203,10 @@ impl<'a> LiquidDocs<'a> {
 					}
 				}
 
+				// @example
 				if parser.peek_matches("example") {
 					parser.consume_chars(7);
-					parser.consume_whitespace();
+					parser.consume_whitespace_until_newline();
 					let start_pos = if let Some((pos, _)) = parser.chars.peek() {
 						*pos
 					} else {
@@ -210,10 +214,26 @@ impl<'a> LiquidDocs<'a> {
 					};
 					let end_pos =
 						parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
+
 					if !doc_block.example.is_empty() {
 						doc_block.example.push('\n');
 					}
-					doc_block.example.push_str(content[start_pos..end_pos].trim());
+
+					let indentation_level = &content[start_pos..end_pos].chars().take_while(|c| c.is_whitespace()).count();
+					content[start_pos..end_pos]
+						.trim()
+						.lines()
+						.map(|line| {
+							let chars_to_skip = line.chars().take(*indentation_level - 1).take_while(|c| c.is_whitespace()).count();
+							&line[line.char_indices().nth(chars_to_skip).map(|(i, _)| i).unwrap_or(line.len())..]
+						})
+						.enumerate()
+						.for_each(|(idx, stripped_line)| {
+							if idx > 0 {
+								doc_block.example.push('\n');
+							}
+							doc_block.example.push_str(stripped_line);
+						});
 				}
 			}
 		}
@@ -227,6 +247,13 @@ impl<'a> LiquidDocs<'a> {
 
 	/// Move the cursor to the next non-whitespace character
 	fn consume_whitespace(&mut self) {
+		while self.chars.peek().map(|(_, ch)| ch.is_whitespace()).unwrap_or(false) {
+			self.chars.next();
+		}
+	}
+
+	/// Move the cursor to the next non-whitespace character unless it's a newline
+	fn consume_whitespace_until_newline(&mut self) {
 		while self.chars.peek().map(|(_, ch)| ch.is_whitespace() && ch != &'\n').unwrap_or(false) {
 			self.chars.next();
 		}
@@ -604,7 +631,7 @@ end
 					},
 				],
 				example: String::from(
-					"{% raw %}\n    {% render 'button', link: '@/collections/all' %}\n    sadsad\n{% render 'button', link: '/collections/all' %}"
+					"{% raw %}\n  {% render 'button', link: '@/collections/all' %}\n  sadsad\n{% render 'button', link: '/collections/all' %}"
 				)
 			})
 		);
@@ -657,7 +684,7 @@ Intended for use @ description foo in a block similar to the button block.
 					},
 				],
 				example: String::from(
-					"{% raw %}\n    {% render 'button', link: '@/collections/all' %}\n    sadsad @ param asdasd\n  {% endraw %}\n\n  test\n{% render 'button', link: '/collections/all' %}"
+					"{% raw %}\n  {% render 'button', link: '@/collections/all' %}\n  sadsad @ param asdasd\n{% endraw %}\n\ntest\n{% render 'button', link: '/collections/all' %}"
 				)
 			})
 		);
@@ -718,6 +745,73 @@ Intended for use @ description foo in a block similar to the button block.
 					optional: true,
 				},],
 				example: String::new()
+			})
+		);
+	}
+
+	#[test]
+	fn parse_doc_content_example_indentation_test() {
+		assert_eq!(
+			LiquidDocs::parse_doc_content(
+				r#"
+@example
+{% raw %}
+	{% render 'card' %}
+{% endraw %}
+"#
+			),
+			Ok(DocBlock {
+				description: String::new(),
+				param: Vec::new(),
+				example: String::from("{% raw %}\n\t{% render 'card' %}\n{% endraw %}"),
+			})
+		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content(
+				r#"
+				@example
+				{% raw %}
+					{% render 'card' %}
+				{% endraw %}
+				"#
+			),
+			Ok(DocBlock {
+				description: String::new(),
+				param: Vec::new(),
+				example: String::from("{% raw %}\n\t{% render 'card' %}\n{% endraw %}"),
+			})
+		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content(
+				r#"
+				@example
+					{% raw %}
+						{% render 'card' %}
+					{% endraw %}
+				"#
+			),
+			Ok(DocBlock {
+				description: String::new(),
+				param: Vec::new(),
+				example: String::from("{% raw %}\n\t{% render 'card' %}\n{% endraw %}"),
+			})
+		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content(
+				r#"
+				@example
+					{% raw %}
+			{% render 'card' %}
+	{% endraw %}
+				"#
+			),
+			Ok(DocBlock {
+				description: String::new(),
+				param: Vec::new(),
+				example: String::from("{% raw %}\n{% render 'card' %}\n{% endraw %}"),
 			})
 		);
 	}
