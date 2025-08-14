@@ -12,6 +12,20 @@ pub enum ParsingError {
 	NoDocContentFound,
 }
 
+impl std::fmt::Display for ParsingError {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		match self {
+			ParsingError::MissingParameterName(line) => write!(f, "Missing parameter near this line:\n{}", line),
+			ParsingError::MissingOptionalClosingBracket(line) => {
+				write!(f, "Missing closing bracket for parameter optionality near this line:\n{}", line)
+			},
+			ParsingError::UnknownParameterType(line) => write!(f, "Unknown parameter type near this line:\n{}", line),
+			ParsingError::UnexpectedParameterEnd(line) => write!(f, "Unexpected parameter end near this line:\n {}", line),
+			ParsingError::NoDocContentFound => write!(f, "No doc content found"),
+		}
+	}
+}
+
 /// The main struct that parses the content of liquid files
 pub struct LiquidDocs<'a> {
 	content: &'a str,

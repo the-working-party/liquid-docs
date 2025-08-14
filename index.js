@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const glob = require("glob");
 
-const { parse, parse_files, TwpTypes } = require("./pkg/twp_types.js");
+const { parse, parse_files, TwpTypes } = require("./pkg/liquid_docs.js");
 
 function get_files(file_path) {
 	const files = glob.sync(file_path, { cwd: process.cwd() });
@@ -72,17 +72,26 @@ if (args.includes("-v") || args.includes("-V") || args.includes("--version")) {
 }
 
 let found_without_types = 0;
+let errors = [];
 console.log("Checking files...");
 let data = get_files(file_path);
 parse_files(data).forEach((file) => {
 	if (file.liquid_types) {
 		process.stdout.write("✔️");
+		if (file.liquid_types.errors?.length > 0) {
+			errors.push(`  Errors: ${file.liquid_types.errors}`);
+		}
 	} else {
 		process.stdout.write("\x1B[31m✖️");
 		found_without_types++;
 	}
 	process.stdout.write(` ${file.path}\x1B[39m\n`);
 });
+
+if (errors.length > 0) {
+	console.warn("\nErrors:");
+	errors.forEach((error) => console.warn(error));
+}
 
 if (found_without_types > 0) {
 	console.log(

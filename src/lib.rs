@@ -9,7 +9,13 @@ pub use liquid_docs::LiquidDocs;
 #[derive(Debug, Serialize)]
 pub struct LiquidFile {
 	pub path: String,
-	pub liquid_types: Option<Vec<DocBlock>>,
+	pub liquid_types: Option<ParseResult>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ParseResult {
+	pub success: Vec<DocBlock>,
+	pub errors: Vec<String>,
 }
 
 /// The three different things Shopify supports inside doc tags
@@ -47,6 +53,27 @@ pub struct FileInput {
 	content: String,
 }
 
+/// Helper function to parse content of a file
+fn parse_content(input: &str) -> ParseResult {
+	let mut result = ParseResult {
+		success: Vec::new(),
+		errors: Vec::new(),
+	};
+
+	if let Some(blocks) = LiquidDocs::extract_doc_blocks(input) {
+		for block in blocks {
+			match LiquidDocs::parse_doc_content(block) {
+				Ok(block_type) => result.success.push(block_type),
+				Err(error) => {
+					result.errors.push(error.to_string());
+				},
+			}
+		}
+	}
+
+	result
+}
+
 /// Parse a Vec<FileInput> and return Vec<LiquidFile>
 #[wasm_bindgen]
 pub fn parse_files(input: JsValue) -> Result<JsValue, JsValue> {
@@ -55,25 +82,15 @@ pub fn parse_files(input: JsValue) -> Result<JsValue, JsValue> {
 	let mut all_files = Vec::with_capacity(files.len());
 
 	for file in files {
-		if let Some(blocks) = LiquidDocs::extract_doc_blocks(&file.content) {
-			let mut liquid_types = Vec::with_capacity(blocks.len());
-
-			for block in blocks {
-				if let Ok(block_type) = LiquidDocs::parse_doc_content(block) {
-					liquid_types.push(block_type);
-				}
-			}
-
-			all_files.push(LiquidFile {
-				path: file.path,
-				liquid_types: Some(liquid_types),
-			});
-		} else {
-			all_files.push(LiquidFile {
-				path: file.path,
-				liquid_types: None,
-			});
-		}
+		let parse_result = parse_content(&file.content);
+		all_files.push(LiquidFile {
+			path: file.path,
+			liquid_types: if parse_result.success.is_empty() && parse_result.errors.is_empty() {
+				None
+			} else {
+				Some(parse_result)
+			},
+		});
 	}
 
 	serde_wasm_bindgen::to_value(&all_files).map_err(|e| JsValue::from_str(&e.to_string()))
@@ -82,13 +99,6 @@ pub fn parse_files(input: JsValue) -> Result<JsValue, JsValue> {
 /// Parse a string of Liquid code and return Vec<DocBlock>
 #[wasm_bindgen]
 pub fn parse(input: String) -> Result<JsValue, JsValue> {
-	let mut liquid_types = Vec::new();
-	if let Some(blocks) = LiquidDocs::extract_doc_blocks(&input) {
-		for block in blocks {
-			if let Ok(block_type) = LiquidDocs::parse_doc_content(block) {
-				liquid_types.push(block_type);
-			}
-		}
-	}
-	serde_wasm_bindgen::to_value(&liquid_types).map_err(|e| JsValue::from_str(&e.to_string()))
+	let result = parse_content(&input);
+	serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
 }
