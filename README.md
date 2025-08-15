@@ -36,6 +36,7 @@ const {
 	TwpTypes,    // the parser struct from Rust
 } = require("the-working-party/liquid-docs");
 
+// An example liquid snippet file
 const result = parse(`
 {%- doc -%}
 Renders an image block.
@@ -124,6 +125,17 @@ Checking files...
 
 Found 1 liquid file without doc tags
 ```
+
+> [!NOTE]
+> The checker will collect files into 10MB batches to make sure we don't hit
+> WASM limits while still reducing the hops between WASM and JS to a minimum
+> Theme Size     | No Batching    | 10MB Batch Calls
+> -------------- | -------------- | ----------------
+> 5MB (small)    | 2              | 2
+> 10MB (typical) | 2              | 2
+> 15MB (large)   | 2              | 4
+> 50MB (huge)    | 2 (risky)      | 10 (safe)
+> 200MB (extreme)| crashes        | 40 (still works)
 
 ## Builder
 

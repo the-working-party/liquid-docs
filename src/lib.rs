@@ -12,6 +12,7 @@ pub struct LiquidFile {
 	pub liquid_types: Option<ParseResult>,
 }
 
+/// The return type for [parse]
 #[derive(Debug, Serialize)]
 pub struct ParseResult {
 	pub success: Vec<DocBlock>,
@@ -76,7 +77,7 @@ fn parse_content(input: &str) -> ParseResult {
 
 /// Parse a Vec<FileInput> and return Vec<LiquidFile>
 #[wasm_bindgen]
-pub fn parse_files(input: JsValue) -> Result<JsValue, JsValue> {
+pub fn parse_batch(input: JsValue) -> Result<JsValue, JsValue> {
 	let files: Vec<FileInput> = serde_wasm_bindgen::from_value(input).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
 	let mut all_files = Vec::with_capacity(files.len());
