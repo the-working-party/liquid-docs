@@ -103,7 +103,7 @@ impl<'a> LiquidDocs<'a> {
 			// description without @description
 			if doc_block.description.is_empty() && ch != '@' {
 				let end_pos = parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
-				doc_block.description = content[line_start..end_pos].trim().to_string();
+				doc_block.description = String::from(content[line_start..end_pos].trim());
 			}
 
 			if ch == '@' {
@@ -118,10 +118,10 @@ impl<'a> LiquidDocs<'a> {
 						parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
 
 					if end_pos > start_pos {
-						if content[start_pos..end_pos].trim().starts_with('-') {
-							doc_block.description = content[start_pos + 1..end_pos].trim().to_string();
+						if let Some(stripped) = content[start_pos..end_pos].trim().strip_prefix('-') {
+							doc_block.description = String::from(stripped.trim());
 						} else {
-							doc_block.description = content[start_pos..end_pos].trim().to_string();
+							doc_block.description = String::from(content[start_pos..end_pos].trim());
 						}
 					}
 				}
@@ -134,13 +134,13 @@ impl<'a> LiquidDocs<'a> {
 					let (_, ch) = if let Some((pos, ch)) = parser.chars.peek() {
 						(*pos, *ch)
 					} else {
-						return Err(ParsingError::UnexpectedParameterEnd(content[line_start..].to_string()));
+						return Err(ParsingError::UnexpectedParameterEnd(String::from(&content[line_start..])));
 					};
 
 					// @param type (optional)
 					if ch == '{' {
 						if parser.chars.next().is_none() {
-							return Err(ParsingError::UnexpectedParameterEnd(content[line_start..].to_string()));
+							return Err(ParsingError::UnexpectedParameterEnd(String::from(&content[line_start..])));
 						};
 
 						parser.consume_whitespace_until_newline();
@@ -157,7 +157,7 @@ impl<'a> LiquidDocs<'a> {
 							param.type_ = Some(ParamType::Object);
 							parser.consume_chars(6);
 						} else {
-							return Err(ParsingError::UnknownParameterType(content[line_start..].to_string()));
+							return Err(ParsingError::UnknownParameterType(String::from(&content[line_start..])));
 						}
 
 						parser.consume_until("}");
@@ -169,7 +169,7 @@ impl<'a> LiquidDocs<'a> {
 					let (start_pos, optional) = if let Some((pos, ch)) = parser.chars.peek() {
 						if ch == &'[' { (*pos + 1, true) } else { (*pos, false) }
 					} else {
-						return Err(ParsingError::MissingParameterName(content[line_start..].to_string()));
+						return Err(ParsingError::MissingParameterName(String::from(&content[line_start..])));
 					};
 					param.optional = optional;
 					if optional {
@@ -181,34 +181,34 @@ impl<'a> LiquidDocs<'a> {
 					let end_pos = if optional {
 						parser
 							.consume_until("]")
-							.ok_or(ParsingError::MissingOptionalClosingBracket(content[line_start..].to_string()))?
+							.ok_or(ParsingError::MissingOptionalClosingBracket(String::from(&content[line_start..])))?
 					} else {
 						parser.consume_until_either(&[" ", "\n"]).unwrap_or(content.len())
 					};
-					param.name = content[start_pos..end_pos].trim().to_string();
+					param.name = String::from(content[start_pos..end_pos].trim());
 					if optional {
 						parser.chars.next(); // consume ']'
 					}
 					if param.name.is_empty() {
-						return Err(ParsingError::MissingParameterName(content[line_start..].to_string()));
+						return Err(ParsingError::MissingParameterName(String::from(&content[line_start..])));
 					}
 					if param.name.contains('\n') {
-						return Err(ParsingError::MissingOptionalClosingBracket(content[line_start..].to_string()));
+						return Err(ParsingError::MissingOptionalClosingBracket(String::from(&content[line_start..])));
 					}
 
 					// @param description (optional)
-					if let Some((_, ch)) = parser.chars.peek() {
-						if ch != &'\n' {
-							parser.consume_whitespace_until_newline();
-							let start_pos = if let Some((pos, ch)) = parser.chars.peek() {
-								if ch == &'-' { *pos + 1 } else { *pos }
-							} else {
-								content.len()
-							};
-							let end_pos = parser.consume_until("\n").unwrap_or(content.len());
-							if end_pos > start_pos {
-								param.description = Some(content[start_pos..end_pos].trim().to_string());
-							}
+					if let Some((_, ch)) = parser.chars.peek()
+						&& ch != &'\n'
+					{
+						parser.consume_whitespace_until_newline();
+						let start_pos = if let Some((pos, ch)) = parser.chars.peek() {
+							if ch == &'-' { *pos + 1 } else { *pos }
+						} else {
+							content.len()
+						};
+						let end_pos = parser.consume_until("\n").unwrap_or(content.len());
+						if end_pos > start_pos {
+							param.description = Some(String::from(content[start_pos..end_pos].trim()));
 						}
 					};
 
@@ -217,7 +217,7 @@ impl<'a> LiquidDocs<'a> {
 					}
 				}
 
-				// @example
+				// @example (optional)
 				if parser.peek_matches("example") {
 					parser.consume_chars(7);
 					parser.consume_whitespace_until_newline();
@@ -234,20 +234,24 @@ impl<'a> LiquidDocs<'a> {
 					}
 
 					let indentation_level = &content[start_pos..end_pos].chars().take_while(|c| c.is_whitespace()).count();
-					content[start_pos..end_pos]
-						.trim()
-						.lines()
-						.map(|line| {
-							let chars_to_skip = line.chars().take(*indentation_level - 1).take_while(|c| c.is_whitespace()).count();
-							&line[line.char_indices().nth(chars_to_skip).map(|(i, _)| i).unwrap_or(line.len())..]
-						})
-						.enumerate()
-						.for_each(|(idx, stripped_line)| {
-							if idx > 0 {
-								doc_block.example.push('\n');
-							}
-							doc_block.example.push_str(stripped_line);
-						});
+					if *indentation_level > 0 {
+						content[start_pos..end_pos]
+							.trim()
+							.lines()
+							.map(|line| {
+								let chars_to_skip = line.chars().take(*indentation_level - 1).take_while(|c| c.is_whitespace()).count();
+								&line[line.char_indices().nth(chars_to_skip).map(|(i, _)| i).unwrap_or(line.len())..]
+							})
+							.enumerate()
+							.for_each(|(idx, stripped_line)| {
+								if idx > 0 {
+									doc_block.example.push('\n');
+								}
+								doc_block.example.push_str(stripped_line);
+							});
+					} else {
+						doc_block.example = String::from(content[start_pos..end_pos].trim());
+					}
 				}
 			}
 		}
@@ -316,13 +320,13 @@ impl<'a> LiquidDocs<'a> {
 	fn skip_to_tag_close(&mut self) -> Option<usize> {
 		self.consume_whitespace();
 		self.skip_dash();
-		if let Some((_, ch)) = self.chars.peek() {
-			if *ch == '%' {
-				self.chars.next(); // consume '%'
-				if self.chars.peek().map(|(_, c)| *c) == Some('}') {
-					self.chars.next(); // consume '}'
-					return self.chars.peek().map(|(pos, _)| *pos).or(Some(self.content.len()));
-				}
+		if let Some((_, ch)) = self.chars.peek()
+			&& *ch == '%'
+		{
+			self.chars.next(); // consume '%'
+			if self.chars.peek().map(|(_, c)| *c) == Some('}') {
+				self.chars.next(); // consume '}'
+				return self.chars.peek().map(|(pos, _)| *pos).or(Some(self.content.len()));
 			}
 		}
 		None
@@ -334,8 +338,14 @@ impl<'a> LiquidDocs<'a> {
 			return None;
 		}
 
-		while let Some((pos, _)) = self.chars.peek() {
-			if pos + target.len() <= self.content.len() && self.content[*pos..pos + target.len()] == *target {
+		let first_char = target.chars().next()?;
+		let target_len = target.len();
+
+		while let Some((pos, ch)) = self.chars.peek() {
+			if *ch == first_char
+				&& *pos + target_len <= self.content.len()
+				&& self.content[*pos..*pos + target_len] == *target
+			{
 				return Some(*pos);
 			}
 			self.chars.next();
@@ -822,6 +832,15 @@ Intended for use @ description foo in a block similar to the button block.
 	{% endraw %}
 				"#
 			),
+			Ok(DocBlock {
+				description: String::new(),
+				param: Vec::new(),
+				example: String::from("{% raw %}\n{% render 'card' %}\n{% endraw %}"),
+			})
+		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content("@example\n{% raw %}\n{% render 'card' %}\n{% endraw %}"),
 			Ok(DocBlock {
 				description: String::new(),
 				param: Vec::new(),
