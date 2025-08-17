@@ -42,7 +42,7 @@ const result = parse(`
 Renders an image block.
 
 @param {string} [loading] - The html loading attribute
-@param {string} [alt]     - The alt text for the image
+@param {string} alt       - The alt text for the image
 
 @example
 {% render 'image',
@@ -84,10 +84,10 @@ console.log(result);
         "name": "alt",
         "description": "The alt text for the image",
         "type": "String",
-        "optional": true
+        "optional": false
       }
     ],
-    "example": "{% render 'image',\n  loading: 'eager',\n%}"
+    "example": ["{% render 'image',\n  loading: 'eager',\n%}"]
   }
 ]
 */

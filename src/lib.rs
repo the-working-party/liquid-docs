@@ -24,7 +24,7 @@ pub struct ParseResult {
 pub struct DocBlock {
 	pub description: String,
 	pub param: Vec<Param>,
-	pub example: String,
+	pub example: Vec<String>,
 }
 
 /// The different types a parameter can be

@@ -229,10 +229,7 @@ impl<'a> LiquidDocs<'a> {
 					let end_pos =
 						parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
 
-					if !doc_block.example.is_empty() {
-						doc_block.example.push('\n');
-					}
-
+					let mut example = String::new();
 					let indentation_level = &content[start_pos..end_pos].chars().take_while(|c| c.is_whitespace()).count();
 					if *indentation_level > 0 {
 						content[start_pos..end_pos]
@@ -245,12 +242,16 @@ impl<'a> LiquidDocs<'a> {
 							.enumerate()
 							.for_each(|(idx, stripped_line)| {
 								if idx > 0 {
-									doc_block.example.push('\n');
+									example.push('\n');
 								}
-								doc_block.example.push_str(stripped_line);
+								example.push_str(stripped_line);
 							});
 					} else {
-						doc_block.example = String::from(content[start_pos..end_pos].trim());
+						example = String::from(content[start_pos..end_pos].trim());
+					}
+
+					if !example.is_empty() {
+						doc_block.example.push(example);
 					}
 				}
 			}
@@ -487,7 +488,7 @@ mod tests {
 			Ok(DocBlock {
 				description: String::from("test"),
 				param: Vec::new(),
-				example: String::new()
+				example: Vec::new()
 			})
 		);
 
@@ -508,7 +509,7 @@ end
 			Ok(DocBlock {
 				description: String::from("The description 1\n\t\t\tWith new lines\n\t\tand different indentation\nend"),
 				param: Vec::new(),
-				example: String::new()
+				example: Vec::new()
 			})
 		);
 
@@ -524,7 +525,7 @@ end
 			Ok(DocBlock {
 				description: String::from("The description 2\nalso with new lines\n  and some indentation\nend"),
 				param: Vec::new(),
-				example: String::new()
+				example: Vec::new()
 			})
 		);
 
@@ -533,7 +534,7 @@ end
 			Ok(DocBlock {
 				description: String::from("The description 3"),
 				param: Vec::new(),
-				example: String::new()
+				example: Vec::new()
 			})
 		);
 	}
@@ -597,9 +598,10 @@ end
 						optional: false,
 					},
 				],
-				example: String::from(
-					"{% render 'example-snippet', var1: 'Featured Products', var2: 3, var5: {} %}\n{% render 'example-snippet',\n  var1: variant.price,\n  var5: false\n%}"
-				)
+				example: vec![
+					String::from("{% render 'example-snippet', var1: 'Featured Products', var2: 3, var5: {} %}"),
+					String::from("{% render 'example-snippet',\n  var1: variant.price,\n  var5: false\n%}")
+				]
 			})
 		);
 
@@ -654,9 +656,10 @@ end
 						optional: true,
 					},
 				],
-				example: String::from(
-					"{% raw %}\n  {% render 'button', link: '@/collections/all' %}\n  sadsad\n{% render 'button', link: '/collections/all' %}"
-				)
+				example: vec![
+					String::from("{% raw %}\n  {% render 'button', link: '@/collections/all' %}\n  sadsad"),
+					String::from("{% render 'button', link: '/collections/all' %}")
+				]
 			})
 		);
 
@@ -707,9 +710,12 @@ Intended for use @ description foo in a block similar to the button block.
 						optional: true,
 					},
 				],
-				example: String::from(
-					"{% raw %}\n  {% render 'button', link: '@/collections/all' %}\n  sadsad @ param asdasd\n{% endraw %}\n\ntest\n{% render 'button', link: '/collections/all' %}"
-				)
+				example: vec![
+					String::from(
+						"{% raw %}\n  {% render 'button', link: '@/collections/all' %}\n  sadsad @ param asdasd\n{% endraw %}\n\ntest"
+					),
+					String::from("{% render 'button', link: '/collections/all' %}")
+				]
 			})
 		);
 	}
@@ -726,7 +732,7 @@ Intended for use @ description foo in a block similar to the button block.
 					type_: None,
 					optional: false,
 				},],
-				example: String::new()
+				example: Vec::new()
 			})
 		);
 
@@ -740,7 +746,7 @@ Intended for use @ description foo in a block similar to the button block.
 					type_: None,
 					optional: false,
 				},],
-				example: String::new()
+				example: Vec::new()
 			})
 		);
 
@@ -754,7 +760,7 @@ Intended for use @ description foo in a block similar to the button block.
 					type_: Some(ParamType::String),
 					optional: false,
 				},],
-				example: String::new()
+				example: Vec::new()
 			})
 		);
 
@@ -768,7 +774,7 @@ Intended for use @ description foo in a block similar to the button block.
 					type_: Some(ParamType::String),
 					optional: true,
 				},],
-				example: String::new()
+				example: Vec::new()
 			})
 		);
 	}
@@ -787,7 +793,7 @@ Intended for use @ description foo in a block similar to the button block.
 			Ok(DocBlock {
 				description: String::new(),
 				param: Vec::new(),
-				example: String::from("{% raw %}\n\t{% render 'card' %}\n{% endraw %}"),
+				example: vec![String::from("{% raw %}\n\t{% render 'card' %}\n{% endraw %}")],
 			})
 		);
 
@@ -803,7 +809,7 @@ Intended for use @ description foo in a block similar to the button block.
 			Ok(DocBlock {
 				description: String::new(),
 				param: Vec::new(),
-				example: String::from("{% raw %}\n\t{% render 'card' %}\n{% endraw %}"),
+				example: vec![String::from("{% raw %}\n\t{% render 'card' %}\n{% endraw %}")],
 			})
 		);
 
@@ -819,7 +825,7 @@ Intended for use @ description foo in a block similar to the button block.
 			Ok(DocBlock {
 				description: String::new(),
 				param: Vec::new(),
-				example: String::from("{% raw %}\n\t{% render 'card' %}\n{% endraw %}"),
+				example: vec![String::from("{% raw %}\n\t{% render 'card' %}\n{% endraw %}")],
 			})
 		);
 
@@ -835,7 +841,7 @@ Intended for use @ description foo in a block similar to the button block.
 			Ok(DocBlock {
 				description: String::new(),
 				param: Vec::new(),
-				example: String::from("{% raw %}\n{% render 'card' %}\n{% endraw %}"),
+				example: vec![String::from("{% raw %}\n{% render 'card' %}\n{% endraw %}")],
 			})
 		);
 
@@ -844,7 +850,7 @@ Intended for use @ description foo in a block similar to the button block.
 			Ok(DocBlock {
 				description: String::new(),
 				param: Vec::new(),
-				example: String::from("{% raw %}\n{% render 'card' %}\n{% endraw %}"),
+				example: vec![String::from("{% raw %}\n{% render 'card' %}\n{% endraw %}")],
 			})
 		);
 	}

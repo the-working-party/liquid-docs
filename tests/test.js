@@ -1,4 +1,4 @@
-const { parse } = require("../pkg/twp_types.js");
+const { parse } = require("../pkg/liquid_docs.js");
 
 const TESTS = [
 	{
@@ -59,7 +59,7 @@ const TESTS = [
 						optional: false,
 					},
 				],
-				example: "",
+				example: [],
 			},
 		],
 	},
@@ -93,7 +93,7 @@ const TESTS = [
 						optional: false,
 					},
 				],
-				example: "",
+				example: [],
 			},
 			{
 				description: "Second description here",
@@ -111,7 +111,7 @@ const TESTS = [
 						optional: false,
 					},
 				],
-				example: "",
+				example: [],
 			},
 		],
 	},
@@ -122,9 +122,9 @@ let failed = 0;
 TESTS.forEach((test) => {
 	process.stdout.write(`Running test "${test.title}" `);
 	let result = parse(test.content);
-	if (JSON.stringify(result) !== JSON.stringify(test.expected)) {
+	if (JSON.stringify(result.success) !== JSON.stringify(test.expected)) {
 		process.stdout.write(
-			`\x1B[41m FAILED \x1B[49m\n  Expected: ${JSON.stringify(test.expected)}\n  Got:      ${JSON.stringify(result)}\n`,
+			`\x1B[41m FAILED \x1B[49m\n  Expected: ${JSON.stringify(test.expected)}\n  Got:      ${JSON.stringify(result.success)}\n`,
 		);
 		failed++;
 	} else {
