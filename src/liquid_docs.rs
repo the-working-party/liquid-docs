@@ -63,19 +63,19 @@ impl<'a> LiquidDocs<'a> {
 				}
 
 				if parser.peek_matches("raw") {
-					parser.skip_to_end_tag("endraw");
+					parser.skip_to_tag("endraw", true);
 					continue;
 				}
 
 				if parser.peek_matches("comment") {
-					parser.skip_to_end_tag("endcomment");
+					parser.skip_to_tag("endcomment", true);
 					continue;
 				}
 
 				if parser.peek_matches("doc") {
 					parser.consume_chars(3);
 					let doc_content_start = parser.skip_to_tag_close()?;
-					let doc_content_end = parser.find_tag("enddoc", false)?;
+					let doc_content_end = parser.skip_to_tag("enddoc", false)?;
 					blocks.push(&content[doc_content_start..doc_content_end]);
 					found_blocks += 1;
 				}
@@ -286,14 +286,14 @@ impl<'a> LiquidDocs<'a> {
 	}
 
 	/// Check if the following content matches a specific substring
-	fn peek_matches(&mut self, word: &str) -> bool {
+	fn peek_matches(&mut self, needle: &str) -> bool {
 		self
 			.chars
 			.peek()
 			.map(|(start_pos, _)| {
-				let end_pos = start_pos + word.len();
+				let end_pos = start_pos + needle.len();
 
-				if end_pos <= self.content.len() && self.content[*start_pos..end_pos].eq_ignore_ascii_case(word) {
+				if end_pos <= self.content.len() && self.content[*start_pos..end_pos].eq_ignore_ascii_case(needle) {
 					if end_pos < self.content.len() {
 						// Safe because if the string comparison succeeds, end_pos must be on a char boundary
 						let next_byte = self.content.as_bytes()[end_pos];
@@ -370,7 +370,7 @@ impl<'a> LiquidDocs<'a> {
 	}
 
 	/// Find the next given tag in the input stream and either return the position before or after the closing tag
-	fn find_tag(&mut self, tag: &str, return_end: bool) -> Option<usize> {
+	fn skip_to_tag(&mut self, tag: &str, return_end: bool) -> Option<usize> {
 		while let Some(tag_start) = self.consume_until("{%") {
 			let current_pos = self.chars.peek().map(|(pos, _)| *pos).unwrap_or(self.content.len());
 			self.consume_chars(tag_start - current_pos + 2); // consume chars to tag and tag itself
@@ -390,23 +390,6 @@ impl<'a> LiquidDocs<'a> {
 		}
 
 		None
-	}
-
-	/// Move to next given closing tag
-	fn skip_to_end_tag(&mut self, end_tag: &str) {
-		while let Some((_, ch)) = self.chars.next() {
-			if ch == '{' && self.chars.peek().map(|(_, c)| *c) == Some('%') {
-				self.chars.next(); // consume '%'
-				self.skip_dash();
-				self.consume_whitespace();
-
-				if self.peek_matches(end_tag) {
-					self.consume_chars(end_tag.len());
-					self.skip_to_tag_close(); // Skip to %}
-					return;
-				}
-			}
-		}
 	}
 }
 
@@ -891,7 +874,158 @@ Intended for use @ description foo in a block similar to the button block.
 	}
 
 	#[test]
-	fn find_next_test() {
+	fn consume_whitespace_test() {
+		let content = " \n mid    \nend!";
+		let mut instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		instance.consume_whitespace();
+		assert_eq!(instance.chars.next(), Some((3, 'm')));
+		instance.consume_whitespace();
+		assert_eq!(instance.chars.next(), Some((4, 'i')));
+		instance.consume_whitespace();
+		assert_eq!(instance.chars.next(), Some((5, 'd')));
+		instance.consume_whitespace();
+		assert_eq!(instance.chars.next(), Some((11, 'e')));
+		instance.consume_whitespace();
+		assert_eq!(instance.chars.next(), Some((12, 'n')));
+		instance.consume_whitespace();
+		assert_eq!(instance.chars.next(), Some((13, 'd')));
+		instance.consume_whitespace();
+		assert_eq!(instance.chars.next(), Some((14, '!')));
+		instance.consume_whitespace();
+		assert_eq!(instance.chars.next(), None);
+		instance.consume_whitespace();
+		assert_eq!(instance.chars.next(), None);
+	}
+
+	#[test]
+	fn consume_whitespace_until_newline_test() {
+		let content = " \n mid    \nend!";
+		let mut instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		instance.consume_whitespace_until_newline();
+		assert_eq!(instance.chars.next(), Some((1, '\n')));
+		instance.consume_whitespace_until_newline();
+		assert_eq!(instance.chars.next(), Some((3, 'm')));
+		instance.consume_whitespace_until_newline();
+		assert_eq!(instance.chars.next(), Some((4, 'i')));
+		instance.consume_whitespace_until_newline();
+		assert_eq!(instance.chars.next(), Some((5, 'd')));
+		instance.consume_whitespace_until_newline();
+		assert_eq!(instance.chars.next(), Some((10, '\n')));
+		instance.consume_whitespace_until_newline();
+		assert_eq!(instance.chars.next(), Some((11, 'e')));
+		instance.consume_whitespace_until_newline();
+		assert_eq!(instance.chars.next(), Some((12, 'n')));
+		instance.consume_whitespace_until_newline();
+		assert_eq!(instance.chars.next(), Some((13, 'd')));
+		instance.consume_whitespace_until_newline();
+		assert_eq!(instance.chars.next(), Some((14, '!')));
+		instance.consume_whitespace_until_newline();
+		assert_eq!(instance.chars.next(), None);
+		instance.consume_whitespace_until_newline();
+		assert_eq!(instance.chars.next(), None);
+	}
+
+	#[test]
+	fn skip_dash_test() {
+		let content = "{% tag -%}";
+		let mut instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		instance.skip_dash();
+		assert_eq!(instance.chars.next(), Some((0, '{')));
+		instance.skip_dash();
+		assert_eq!(instance.chars.next(), Some((1, '%')));
+		instance.skip_dash();
+		assert_eq!(instance.chars.next(), Some((2, ' ')));
+		instance.skip_dash();
+		assert_eq!(instance.chars.next(), Some((3, 't')));
+		instance.skip_dash();
+		assert_eq!(instance.chars.next(), Some((4, 'a')));
+		instance.skip_dash();
+		assert_eq!(instance.chars.next(), Some((5, 'g')));
+		instance.skip_dash();
+		assert_eq!(instance.chars.next(), Some((6, ' ')));
+		instance.skip_dash();
+		assert_eq!(instance.chars.next(), Some((8, '%')));
+		instance.skip_dash();
+		assert_eq!(instance.chars.next(), Some((9, '}')));
+		instance.skip_dash();
+		assert_eq!(instance.chars.next(), None);
+		instance.skip_dash();
+		assert_eq!(instance.chars.next(), None);
+	}
+
+	#[test]
+	fn peek_matches_test() {
+		let content = "{% liquid";
+		let mut instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		assert_eq!(instance.peek_matches("liquid"), false);
+		assert_eq!(instance.chars.next(), Some((0, '{')));
+		assert_eq!(instance.peek_matches("liquid"), false);
+		assert_eq!(instance.chars.next(), Some((1, '%')));
+		assert_eq!(instance.peek_matches("liquid"), false);
+		assert_eq!(instance.chars.next(), Some((2, ' ')));
+		assert_eq!(instance.peek_matches("liquid"), true);
+		assert_eq!(instance.chars.next(), Some((3, 'l')));
+		assert_eq!(instance.peek_matches("liquid"), false);
+		assert_eq!(instance.peek_matches("iquid"), true);
+		assert_eq!(instance.peek_matches("iqui"), false);
+	}
+
+	#[test]
+	fn consume_chars_test() {
+		let content = "0123456789end";
+		let mut instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		assert_eq!(instance.chars.next(), Some((0, '0')));
+		instance.consume_chars(1);
+		assert_eq!(instance.chars.next(), Some((2, '2')));
+		instance.consume_chars(5);
+		assert_eq!(instance.chars.next(), Some((8, '8')));
+	}
+
+	#[test]
+	fn skip_to_tag_close_test() {
+		let content = "{% tag %}end";
+		let mut instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		assert_eq!(instance.chars.next(), Some((0, '{')));
+		assert_eq!(instance.chars.next(), Some((1, '%')));
+		assert_eq!(instance.chars.next(), Some((2, ' ')));
+		instance.skip_to_tag_close();
+		assert_eq!(instance.chars.next(), Some((3, 't')));
+		instance.skip_to_tag_close();
+		assert_eq!(instance.chars.next(), Some((4, 'a')));
+		instance.skip_to_tag_close();
+		assert_eq!(instance.chars.next(), Some((5, 'g')));
+		instance.skip_to_tag_close();
+		assert_eq!(instance.chars.next(), Some((9, 'e')));
+		instance.skip_to_tag_close();
+		assert_eq!(instance.chars.next(), Some((10, 'n')));
+	}
+
+	#[test]
+	fn consume_until_test() {
 		let content = "start @test end";
 
 		assert_eq!(
@@ -953,5 +1087,21 @@ end!
 			.consume_until_either(&["@param ", "@example ", "@description "]),
 			Some(39)
 		);
+	}
+
+	#[test]
+	fn skip_to_tag_test() {
+		let content = "{%- tag-%}stuff stuff {%-    endtag  %}";
+		let mut instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		assert_eq!(instance.skip_to_tag("tag", false), Some(0));
+		instance.chars = content.char_indices().peekable();
+		assert_eq!(instance.skip_to_tag("tag", true), Some(10));
+		assert_eq!(instance.skip_to_tag("endtag", false), Some(22));
+		instance.chars = content.char_indices().peekable();
+		assert_eq!(instance.skip_to_tag("endtag", true), Some(39));
 	}
 }
