@@ -1,6 +1,8 @@
+const { execSync } = require("child_process");
+
 const { parse } = require("../pkg/liquid_docs.js");
 
-const TESTS = [
+const PARSE_TESTS = [
 	{
 		title: "Complex example",
 		content: `
@@ -117,9 +119,9 @@ const TESTS = [
 	},
 ];
 
-process.stdout.write("\n");
+console.log("\x1B[4mRUNNING PARSING TESTS\x1B[0m");
 let failed = 0;
-TESTS.forEach((test) => {
+PARSE_TESTS.forEach((test) => {
 	process.stdout.write(`Running test "${test.title}" `);
 	let result = parse(test.content);
 	if (JSON.stringify(result.success) !== JSON.stringify(test.expected)) {
@@ -133,9 +135,63 @@ TESTS.forEach((test) => {
 });
 
 if (failed == 0) {
-	let passed = TESTS.length - failed;
-	console.log(`\n\nPassed ${passed} test${passed > 1 ? "s" : ""}!`);
+	let passed = PARSE_TESTS.length - failed;
+	console.log(
+		`\n\x1B[32mPassed ${passed} test${passed > 1 ? "s" : ""}!\x1B[39m`,
+	);
 } else {
-	console.log(`\n\nFailed ${failed} test${failed > 1 ? "s" : ""}!`);
+	console.log(
+		`\n\x1B[31mFailed ${failed} test${failed > 1 ? "s" : ""}!\x1B[39m`,
+	);
+	process.exit(1);
+}
+
+const CHECK_TESTS = [
+	{
+		title: "Single folder test",
+		path: "tests/fixtures/*.liquid",
+		pass: true,
+	},
+	{
+		title: "Multiple folders test with failed passes",
+		path: "tests/fixtures/**/*.liquid",
+		pass: false,
+	},
+	{
+		title: "Mixed folders test",
+		path: "tests/fixtures/{*.liquid,subfolder/**/*.liquid}",
+		pass: true,
+	},
+];
+
+console.log("\n\x1B[4mRUNNING CHECK TESTS\x1B[0m");
+failed = 0;
+CHECK_TESTS.forEach((test) => {
+	process.stdout.write(`Running test "${test.title}" `);
+	let passed;
+	try {
+		execSync(`node ./index.js "${test.path}"`, { encoding: "utf8" });
+		passed = true;
+	} catch (error) {
+		passed = false;
+	}
+
+	if (passed == test.pass) {
+		process.stdout.write("\x1B[42m PASSED \x1B[49m\n");
+	} else {
+		process.stdout.write(`\x1B[41m FAILED \x1B[49m\n`);
+		failed++;
+	}
+});
+
+if (failed == 0) {
+	let passed = PARSE_TESTS.length - failed;
+	console.log(
+		`\n\x1B[32mPassed ${passed} test${passed > 1 ? "s" : ""}!\x1B[39m`,
+	);
+} else {
+	console.log(
+		`\n\x1B[31mFailed ${failed} test${failed > 1 ? "s" : ""}!\x1B[39m`,
+	);
 	process.exit(1);
 }
