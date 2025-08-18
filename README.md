@@ -6,8 +6,8 @@
 ```
 
 A parser for [Shopify liquid doc tags](https://shopify.dev/docs/storefronts/themes/tools/liquid-doc)
-that allows you to extract the `{% doc %}` content of a liquid file into an object, check liquid files
-to make sure they all have a doc block and auto generate a doc site for all your liquid files.
+that allows you to extract the `{% doc %}` content of a liquid file into an object and check liquid files
+to make sure they all have a doc block. Written in Rust and compiled to WASM to make it run in node and the browser.
 
 <br>
 
@@ -15,7 +15,6 @@ to make sure they all have a doc block and auto generate a doc site for all your
 
 - [Parser](#parser)
 - [Checker](#checker)
-- [Builder](#builder)
 - [Contribution](#contribution)
 - [License](#license)
 
@@ -136,10 +135,6 @@ Found 1 liquid file without doc tags
 > 15MB (large)   | 2              | 4
 > 50MB (huge)    | 2 (risky)      | 10 (safe)
 > 200MB (extreme)| crashes        | 40 (still works)
-
-## Builder
-
-TODO
 
 ## Contribution
 
