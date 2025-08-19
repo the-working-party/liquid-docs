@@ -64,7 +64,9 @@ module.exports = {
 };
 
 function help() {
-	const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+	const pkg = JSON.parse(
+		fs.readFileSync(path.join(__dirname, "package.json"), "utf8"),
+	);
 	console.log(`
  █   █ █▀█ █ █ █ █▀▄   █▀▄ █▀█ █▀▀ █▀▀
  █▄▄ █ ▀▀█ █▄█ █ █▄▀   █▄▀ █▄█ █▄▄ ▄▄█ v${pkg.version}
@@ -106,7 +108,9 @@ if (!file_path || args.includes("-h") || args.includes("--help")) {
 }
 
 if (args.includes("-v") || args.includes("-V") || args.includes("--version")) {
-	const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+	const pkg = JSON.parse(
+		fs.readFileSync(path.join(__dirname, "package.json"), "utf8"),
+	);
 	console.log(`v${pkg.version}`);
 	process.exit(0);
 }

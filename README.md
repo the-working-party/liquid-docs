@@ -143,6 +143,7 @@ efficient.
 
 ## Releases
 
+- v1.0.2  - Fixed version display in help and version flag
 - v1.0.1  - Fixed tarball wasm inclusion
 - v1.0.0  - First release
 
