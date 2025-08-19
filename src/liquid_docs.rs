@@ -7,7 +7,6 @@ use crate::{DocBlock, Param, ParamType};
 pub enum ParsingError {
 	MissingParameterName(String),
 	MissingOptionalClosingBracket(String),
-	UnknownParameterType(String),
 	UnexpectedParameterEnd(String),
 	NoDocContentFound,
 }
@@ -19,7 +18,6 @@ impl std::fmt::Display for ParsingError {
 			ParsingError::MissingOptionalClosingBracket(line) => {
 				write!(f, "Missing closing bracket for parameter optionality near this line:\n{}", line)
 			},
-			ParsingError::UnknownParameterType(line) => write!(f, "Unknown parameter type near this line:\n{}", line),
 			ParsingError::UnexpectedParameterEnd(line) => write!(f, "Unexpected parameter end near this line:\n {}", line),
 			ParsingError::NoDocContentFound => write!(f, "No doc content found"),
 		}
@@ -161,7 +159,7 @@ impl<'a> LiquidDocs<'a> {
 							} else if type_name == "object" {
 								ParamType::Object
 							} else {
-								return Err(ParsingError::UnknownParameterType(String::from(&content[line_start..])));
+								ParamType::Unknown(String::from(type_name))
 							};
 
 							if is_array {
@@ -713,6 +711,20 @@ Intended for use @ description foo in a block similar to the button block.
 				]
 			})
 		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content("Description with words\n @param {unknown} foo - bar\n\n end\n"),
+			Ok(DocBlock {
+				description: String::from("Description with words"),
+				param: vec![Param {
+					name: String::from("foo"),
+					description: Some(String::from("bar")),
+					type_: Some(ParamType::Unknown(String::from("unknown"))),
+					optional: false,
+				},],
+				example: Vec::new(),
+			})
+		);
 	}
 
 	#[test]
@@ -908,11 +920,6 @@ Intended for use @ description foo in a block similar to the button block.
 
 	#[test]
 	fn parse_doc_content_param_error_test() {
-		assert_eq!(
-			LiquidDocs::parse_doc_content("Description with words\n @param {unknown} foo - bar\n\n end\n"),
-			Err(ParsingError::UnknownParameterType(String::from("@param {unknown} foo - bar\n\n end\n")))
-		);
-
 		assert_eq!(
 			LiquidDocs::parse_doc_content("Description with words\n @param \n"),
 			Err(ParsingError::MissingParameterName(String::from("@param \n")))

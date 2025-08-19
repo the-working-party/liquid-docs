@@ -25,8 +25,9 @@ This project wants to stay as close to, how Shopify interprets the doc tag, as p
 Right now this library supports only what has been noted in the [Shopify liquid docs](https://shopify.dev/docs/storefronts/themes/tools/liquid-doc):
 - `@description`, `@param` and `@example`
 - Description without `@description` at the top
-- Param optionality
 - Param types: `string`, `string[]`, `number`, `number[]`, `boolean`, `boolean[]`, `object` and `object[]`
+- Param types also supports Shopify objects via the `Unknown` type. e.g. `{ Unknown: "currency" }`
+- Param optionality
 - Param type and description are optional
 - Multiple examples
 
@@ -155,6 +156,7 @@ efficient.
 
 ## Releases
 
+- v2.0.0  - Added support for unknown types, checker does not error on unknown types anymore
 - v1.1.0  - Added support of array types in param
 - v1.0.2  - Fixed version display in help and version flag
 - v1.0.1  - Fixed tarball wasm inclusion

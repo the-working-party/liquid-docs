@@ -13,9 +13,11 @@ const PARSE_TESTS = [
 {%- endcomment -%}
 
 {%  doc   %}
-@description                 Card snippet to display a card with an image and title
+@description               - Card snippet to display a card with an image and title
 @param {string} [card_class] Optional class on the parent element
 @param {number} sizes -      The sizes attribute for the image
+@param {boolean[]} foo     - An array of booleans
+@param {currency} [bar]    - A currency value
 {%enddoc   %}
 <a href="{{ article.url }}" class="article-card{% if card_class != blank %} {{ card_class }}{% endif %}">
 	{% if article.image %}
@@ -59,6 +61,22 @@ const PARSE_TESTS = [
 						description: "The sizes attribute for the image",
 						type: "Number",
 						optional: false,
+					},
+					{
+						name: "foo",
+						description: "An array of booleans",
+						type: {
+							ArrayOf: "Boolean",
+						},
+						optional: false,
+					},
+					{
+						name: "bar",
+						description: "A currency value",
+						type: {
+							Unknown: "currency",
+						},
+						optional: true,
 					},
 				],
 				example: [],
