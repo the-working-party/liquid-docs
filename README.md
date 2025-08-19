@@ -22,6 +22,13 @@ to make sure they all have a doc block. Written in Rust and compiled to WASM to 
 ## Goals
 
 This project wants to stay as close to, how Shopify interprets the doc tag, as possible.
+Right now this library supports only what has been noted in the [Shopify liquid docs](https://shopify.dev/docs/storefronts/themes/tools/liquid-doc):
+- `@description`, `@param` and `@example`
+- Description without `@description` at the top
+- Param optionality
+- Param types: `string`, `string[]`, `number`, `number[]`, `boolean`, `boolean[]`, `object` and `object[]`
+- Param type and description are optional
+- Multiple examples
 
 ## Parser
 
@@ -148,6 +155,7 @@ efficient.
 
 ## Releases
 
+- v1.1.0  - Added support of array types in param
 - v1.0.2  - Fixed version display in help and version flag
 - v1.0.1  - Fixed tarball wasm inclusion
 - v1.0.0  - First release

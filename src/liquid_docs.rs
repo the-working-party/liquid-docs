@@ -131,7 +131,7 @@ impl<'a> LiquidDocs<'a> {
 					parser.consume_chars(5);
 					parser.consume_whitespace_until_newline();
 					let mut param = Param::default();
-					let (_, ch) = if let Some((pos, ch)) = parser.chars.peek() {
+					let (start_pos, ch) = if let Some((pos, ch)) = parser.chars.peek() {
 						(*pos, *ch)
 					} else {
 						return Err(ParsingError::UnexpectedParameterEnd(String::from(&content[line_start..])));
@@ -143,24 +143,36 @@ impl<'a> LiquidDocs<'a> {
 							return Err(ParsingError::UnexpectedParameterEnd(String::from(&content[line_start..])));
 						};
 
-						parser.consume_whitespace_until_newline();
-						if parser.peek_matches("string") {
-							param.type_ = Some(ParamType::String);
-							parser.consume_chars(6);
-						} else if parser.peek_matches("number") {
-							param.type_ = Some(ParamType::Number);
-							parser.consume_chars(6);
-						} else if parser.peek_matches("boolean") {
-							param.type_ = Some(ParamType::Boolean);
-							parser.consume_chars(7);
-						} else if parser.peek_matches("object") {
-							param.type_ = Some(ParamType::Object);
-							parser.consume_chars(6);
+						if let Some(end_pos) = parser.consume_until("}") {
+							let mut type_name = content[start_pos + 1..end_pos].trim();
+							let is_array = if type_name.ends_with("[]") {
+								type_name = &type_name[..type_name.len() - 2];
+								true
+							} else {
+								false
+							};
+
+							let explicit_type = if type_name == "string" {
+								ParamType::String
+							} else if type_name == "number" {
+								ParamType::Number
+							} else if type_name == "boolean" {
+								ParamType::Boolean
+							} else if type_name == "object" {
+								ParamType::Object
+							} else {
+								return Err(ParsingError::UnknownParameterType(String::from(&content[line_start..])));
+							};
+
+							if is_array {
+								param.type_ = Some(ParamType::ArrayOf(Box::new(explicit_type)));
+							} else {
+								param.type_ = Some(explicit_type);
+							}
 						} else {
-							return Err(ParsingError::UnknownParameterType(String::from(&content[line_start..])));
+							return Err(ParsingError::UnexpectedParameterEnd(String::from(&content[line_start..])));
 						}
 
-						parser.consume_until("}");
 						parser.chars.next(); // consume '}'
 					}
 
@@ -760,6 +772,62 @@ Intended for use @ description foo in a block similar to the button block.
 				example: Vec::new()
 			})
 		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content("Description with words\n@param {string[]  } [foo] bar"),
+			Ok(DocBlock {
+				description: String::from("Description with words"),
+				param: vec![Param {
+					name: String::from("foo"),
+					description: Some(String::from("bar")),
+					type_: Some(ParamType::ArrayOf(Box::new(ParamType::String))),
+					optional: true,
+				},],
+				example: Vec::new()
+			})
+		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content("Description with words\n@param {  number[]} [foo] bar"),
+			Ok(DocBlock {
+				description: String::from("Description with words"),
+				param: vec![Param {
+					name: String::from("foo"),
+					description: Some(String::from("bar")),
+					type_: Some(ParamType::ArrayOf(Box::new(ParamType::Number))),
+					optional: true,
+				},],
+				example: Vec::new()
+			})
+		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content("Description with words\n@param { boolean[] } foo bar"),
+			Ok(DocBlock {
+				description: String::from("Description with words"),
+				param: vec![Param {
+					name: String::from("foo"),
+					description: Some(String::from("bar")),
+					type_: Some(ParamType::ArrayOf(Box::new(ParamType::Boolean))),
+					optional: false,
+				},],
+				example: Vec::new()
+			})
+		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content("Description with words\n@param {object[]} foo bar"),
+			Ok(DocBlock {
+				description: String::from("Description with words"),
+				param: vec![Param {
+					name: String::from("foo"),
+					description: Some(String::from("bar")),
+					type_: Some(ParamType::ArrayOf(Box::new(ParamType::Object))),
+					optional: false,
+				},],
+				example: Vec::new()
+			})
+		);
 	}
 
 	#[test]
@@ -869,7 +937,7 @@ Intended for use @ description foo in a block similar to the button block.
 
 		assert_eq!(
 			LiquidDocs::parse_doc_content("Description with words\n @param {string foo bar"),
-			Err(ParsingError::MissingParameterName(String::from("@param {string foo bar")))
+			Err(ParsingError::UnexpectedParameterEnd(String::from("@param {string foo bar")))
 		);
 	}
 

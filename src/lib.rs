@@ -35,6 +35,7 @@ pub enum ParamType {
 	Number,
 	Boolean,
 	Object,
+	ArrayOf(Box<ParamType>),
 }
 
 /// Type of param type within doc a tag
