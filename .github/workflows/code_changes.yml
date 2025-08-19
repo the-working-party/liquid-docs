@@ -1,0 +1,11 @@
+name: Testing on Code Changes
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    uses: ./.github/workflows/testing.yml

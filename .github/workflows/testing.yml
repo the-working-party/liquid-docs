@@ -1,7 +1,7 @@
-name: Testing
+name: Testing code
 
 on:
-  pull_request:
+  workflow_call:
 
 jobs:
   test:

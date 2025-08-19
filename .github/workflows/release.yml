@@ -6,19 +6,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          registry-url: https://npm.pkg.github.com/
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
-
-      - run: npm install
-      - run: npm build
-      - run: npm test
+    uses: ./.github/workflows/testing.yml
 
   publish:
     needs: test
