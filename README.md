@@ -13,10 +13,15 @@ to make sure they all have a doc block. Written in Rust and compiled to WASM to 
 
 ## Content
 
+- [Goals](#goals)
 - [Parser](#parser)
 - [Checker](#checker)
 - [Contribution](#contribution)
 - [License](#license)
+
+## Goals
+
+This project wants to stay as close to, how Shopify interprets the doc tag, as possible.
 
 ## Parser
 
