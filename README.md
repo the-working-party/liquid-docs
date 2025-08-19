@@ -24,7 +24,7 @@ This library can be used as a library in your or JS/TS (or Rust) project.
 
 To install:
 ```sh
-npm i the-working-party/liquid-docs
+npm i @the-working-party/liquid-docs
 ```
 
 ```js
@@ -33,7 +33,7 @@ const {
 	parse,       // parse the input of a single file
 	parse_files, // parse a list of files
 	TwpTypes,    // the parser struct from Rust
-} = require("the-working-party/liquid-docs");
+} = require("@the-working-party/liquid-docs");
 
 // An example liquid snippet file
 const result = parse(`
@@ -100,7 +100,7 @@ The checker will return a non-zero error code if it finds a file that does not
 contain a doc tag.
 
 ```sh
-$ npm i -g the-working-party/liquid-docs
+$ npm i -g @the-working-party/liquid-docs
 ```
 
 Usage:
