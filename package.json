@@ -13,9 +13,9 @@
 		"README.md"
 	],
 	"publishConfig": {
-		"registry": "https://npm.pkg.github.com"
+		"registry": "https://registry.npmjs.org"
 	},
-	"public": true,
+	"access": "public",
 	"scripts": {
 		"build": "wasm-pack build --release --target nodejs --out-dir pkg && rm -f pkg/.gitignore",
 		"test": "npm run build && npm run test:rust && npm run test:js",
