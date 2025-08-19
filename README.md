@@ -1,4 +1,4 @@
-<img src="assets/logo.png" alt="Liquid Docs Logo" width="180" height="180" align="left">
+<img src="./assets/logo.png" alt="Liquid Docs Logo" width="180" height="180" align="left">
 
 ```
  █   █ █▀█ █ █ █ █▀▄   █▀▄ █▀█ █▀▀ █▀▀
@@ -140,6 +140,11 @@ Found 1 liquid file without doc tags
 
 Most of the logic is kept in the rust code base to keep this library fast and
 efficient.
+
+## Releases
+
+- v1.0.1  - Fixed tarball wasm inclusion
+- v1.0.0  - First release
 
 ## License
 

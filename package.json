@@ -1,9 +1,9 @@
 {
 	"name": "@the-working-party/liquid-docs",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "A parser for Shopify liquid doc tags using Rust/WASM",
 	"bin": {
-		"liquid-docs-check": "./index.js"
+		"liquid-docs-check": "index.js"
 	},
 	"main": "./index.js",
 	"types": "pkg/twp_types.d.ts",
@@ -17,7 +17,7 @@
 	},
 	"public": true,
 	"scripts": {
-		"build": "wasm-pack build --target nodejs --out-dir pkg",
+		"build": "wasm-pack build --release --target nodejs --out-dir pkg && rm -f pkg/.gitignore",
 		"test": "npm run build && npm run test:rust && npm run test:js",
 		"test:rust": "cargo test",
 		"test:js": "node tests/test.js",
@@ -36,7 +36,7 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/the-working-party/liquid-docs"
+		"url": "git+https://github.com/the-working-party/liquid-docs.git"
 	},
 	"engines": {
 		"node": ">=20.0.0"
