@@ -1,5 +1,5 @@
 {
-	"name": "liquid-docs",
+	"name": "@the-working-party/liquid-docs",
 	"version": "1.0.0",
 	"description": "A parser for Shopify liquid doc tags using Rust/WASM",
 	"bin": {
@@ -12,6 +12,10 @@
 		"index.js",
 		"README.md"
 	],
+	"publishConfig": {
+		"registry": "https://npm.pkg.github.com"
+	},
+	"public": true,
 	"scripts": {
 		"build": "wasm-pack build --target nodejs --out-dir pkg",
 		"test": "npm run build && npm run test:rust && npm run test:js",
@@ -41,6 +45,6 @@
 		"wasm-pack": "^0.13.1"
 	},
 	"dependencies": {
-		"glob": "^11.0.3"
+		"glob": "^11"
 	}
 }
