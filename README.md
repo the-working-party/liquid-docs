@@ -26,7 +26,7 @@ Right now this library supports only what has been noted in the [Shopify liquid 
 - `@description`, `@param` and `@example`
 - Description without `@description` at the top
 - Param types: `string`, `string[]`, `number`, `number[]`, `boolean`, `boolean[]`, `object` and `object[]`
-- Param types also supports Shopify objects via the `Unknown` type. e.g. `{ Unknown: "currency" }`
+- Param types also supports Shopify objects via the `Shopify` type. e.g. `{ Shopify: "currency" }`
 - Param optionality
 - Param type and description are optional
 - Multiple examples
