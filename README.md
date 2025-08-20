@@ -156,6 +156,7 @@ efficient.
 
 ## Releases
 
+- v3.0.0  - Extracting legal Shopify objects directly from Shopify codebase, renamed `Unknown` type to `Shopify`
 - v2.0.0  - Added support for unknown types, checker does not error on unknown types anymore
 - v1.1.0  - Added support of array types in param
 - v1.0.2  - Fixed version display in help and version flag

@@ -74,7 +74,7 @@ const PARSE_TESTS = [
 						name: "bar",
 						description: "A currency value",
 						type: {
-							Unknown: "currency",
+							Shopify: "currency",
 						},
 						optional: true,
 					},
@@ -203,7 +203,7 @@ CHECK_TESTS.forEach((test) => {
 });
 
 if (failed == 0) {
-	let passed = PARSE_TESTS.length - failed;
+	let passed = CHECK_TESTS.length - failed;
 	console.log(
 		`\n\x1B[32mPassed ${passed} test${passed > 1 ? "s" : ""}!\x1B[39m`,
 	);

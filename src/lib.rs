@@ -1,4 +1,5 @@
 mod liquid_docs;
+mod shopify_liquid_objects;
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -36,7 +37,7 @@ pub enum ParamType {
 	Boolean,
 	Object,
 	ArrayOf(Box<ParamType>),
-	Unknown(String),
+	Shopify(String),
 }
 
 /// Type of param type within doc a tag

@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::{DocBlock, Param, ParamType};
+use crate::{DocBlock, Param, ParamType, shopify_liquid_objects::SHOPIFY_ALLOWED_OBJECTS};
 
 /// The error types our [LiquidDocs] methods could throw
 #[derive(Debug, PartialEq, Serialize)]
@@ -8,6 +8,7 @@ pub enum ParsingError {
 	MissingParameterName(String),
 	MissingOptionalClosingBracket(String),
 	UnexpectedParameterEnd(String),
+	UnknownParameterType(String),
 	NoDocContentFound,
 }
 
@@ -19,6 +20,7 @@ impl std::fmt::Display for ParsingError {
 				write!(f, "Missing closing bracket for parameter optionality near this line:\n{}", line)
 			},
 			ParsingError::UnexpectedParameterEnd(line) => write!(f, "Unexpected parameter end near this line:\n {}", line),
+			ParsingError::UnknownParameterType(item) => write!(f, "Unknown parameter type: \"{}\"", item),
 			ParsingError::NoDocContentFound => write!(f, "No doc content found"),
 		}
 	}
@@ -159,7 +161,14 @@ impl<'a> LiquidDocs<'a> {
 							} else if type_name == "object" {
 								ParamType::Object
 							} else {
-								ParamType::Unknown(String::from(type_name))
+								let is_valid_param_type = matches!(type_name, "string" | "number" | "boolean" | "object")
+									|| SHOPIFY_ALLOWED_OBJECTS.contains(&type_name);
+
+								if !is_valid_param_type {
+									return Err(ParsingError::UnknownParameterType(String::from(type_name)));
+								} else {
+									ParamType::Shopify(String::from(type_name))
+								}
 							};
 
 							if is_array {
@@ -713,13 +722,13 @@ Intended for use @ description foo in a block similar to the button block.
 		);
 
 		assert_eq!(
-			LiquidDocs::parse_doc_content("Description with words\n @param {unknown} foo - bar\n\n end\n"),
+			LiquidDocs::parse_doc_content("Description with words\n @param {collection} foo - bar\n\n end\n"),
 			Ok(DocBlock {
 				description: String::from("Description with words"),
 				param: vec![Param {
 					name: String::from("foo"),
 					description: Some(String::from("bar")),
-					type_: Some(ParamType::Unknown(String::from("unknown"))),
+					type_: Some(ParamType::Shopify(String::from("collection"))),
 					optional: false,
 				},],
 				example: Vec::new(),
@@ -945,6 +954,11 @@ Intended for use @ description foo in a block similar to the button block.
 		assert_eq!(
 			LiquidDocs::parse_doc_content("Description with words\n @param {string foo bar"),
 			Err(ParsingError::UnexpectedParameterEnd(String::from("@param {string foo bar")))
+		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content("Description with words\n @param {unknown} foo - bar\n\n end\n"),
+			Err(ParsingError::UnknownParameterType(String::from("unknown")))
 		);
 	}
 
