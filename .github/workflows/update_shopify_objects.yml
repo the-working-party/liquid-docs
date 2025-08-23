@@ -1,7 +1,6 @@
 name: Update Shopify Liquid objects
 
 on:
-  workflow_dispatch:
   schedule:
     - cron: "0 15 * * *" # Daily at 15:00 UTC (1am AEST)
 
