@@ -1,0 +1,86 @@
+name: Update Shopify Liquid objects
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 15 * * *" # Daily at 15:00 UTC (1am AEST)
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Run updater
+        run: |
+          set -euo pipefail # just making sure
+          cargo run --locked --manifest-path updater/Cargo.toml
+
+      - name: Check for changes
+        id: changes
+        run: |
+          set -euo pipefail # just making double sure
+          if git diff --quiet -- src/shopify_liquid_objects.rs; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+
+            # Capture the diff and save it to a file
+            git diff -- src/shopify_liquid_objects.rs > diff.md
+
+            # Also create a stats summary
+            git diff --stat -- src/shopify_liquid_objects.rs > diff-stats.md
+
+            # Set the diff as a multiline output
+            # Using EOF delimiter to handle multiline content
+            {
+              echo 'diff<<EOF'
+              cat diff.md
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+
+            # Set the stats as output
+            {
+              echo 'diff_stats<<EOF'
+              cat diff-stats.md
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Update Shopify liquid objects"
+          title: "Update Shopify Liquid Objects"
+          body: |
+            Automated update of Shopify liquid objects from upstream
+            [Shopify/theme-liquid-docs](https://raw.githubusercontent.com/Shopify/theme-liquid-docs/main/data/objects.json) repo.<br>
+
+            ## Summary
+            ```
+            ${{ steps.changes.outputs.diff_stats }}
+            ```
+
+            <details>
+            <summary>View full diff</summary>
+
+            ```diff
+            ${{ steps.changes.outputs.diff }}
+            ```
+
+            </details>
+          branch: auto-update-shopify-objects
+          add-paths: src/shopify_liquid_objects.rs
+          delete-branch: true
