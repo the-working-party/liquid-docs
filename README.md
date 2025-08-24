@@ -151,8 +151,10 @@ Found 1 liquid file without doc tags
 
 ## Contribution
 
-Most of the logic is kept in the rust code base to keep this library fast and
-efficient.
+To contribute please note:
+- As much of the logic as possible is kept in the rust code base to keep this library fast and
+efficient. JS is only used to interface with the filesystem as WASI isn't mature enough yet.
+- We use the definitions of the upstream [Shopify/theme-liquid-docs](https://raw.githubusercontent.com/Shopify/theme-liquid-docs/main/data/objects.json) repo to detect valid types. This is checked in a [Github action](./.github/workflows/update_shopify_objects.yml) once a day and if changes are found a PR is generated automatically.
 
 ## Releases
 
