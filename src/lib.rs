@@ -13,11 +13,19 @@ pub struct LiquidFile {
 	pub liquid_types: Option<ParseResult>,
 }
 
+/// The error type for [parse]
+#[derive(Debug, Serialize)]
+pub struct ParseError {
+	line: usize,
+	column: usize,
+	message: String,
+}
+
 /// The return type for [parse]
 #[derive(Debug, Serialize)]
 pub struct ParseResult {
 	pub success: Vec<DocBlock>,
-	pub errors: Vec<String>,
+	pub errors: Vec<ParseError>,
 }
 
 /// The three different things Shopify supports inside doc tags
@@ -69,7 +77,7 @@ fn parse_content(input: &str) -> ParseResult {
 			match LiquidDocs::parse_doc_content(block) {
 				Ok(block_type) => result.success.push(block_type),
 				Err(error) => {
-					result.errors.push(error.to_string());
+					result.errors.push(error.into());
 				},
 			}
 		}

@@ -71,7 +71,7 @@ function help() {
  █   █ █▀█ █ █ █ █▀▄   █▀▄ █▀█ █▀▀ █▀▀
  █▄▄ █ ▀▀█ █▄█ █ █▄▀   █▄▀ █▄█ █▄▄ ▄▄█ v${pkg.version}
 
-A parser for Shopify liquid doc tags
+A checker for Shopify liquid doc tags
 https://shopify.dev/docs/storefronts/themes/tools/liquid-doc
 
 Usage:
@@ -85,6 +85,11 @@ Arguments:
                  Can use glob patterns.
 
 Options:
+  -w, --warn     Warn instead of error on files without doc tags.
+  -c, --ci       Run the check in CI mode.
+                 Output uses GCC diagnostic format for CI annotations:
+                 <file>:<line>:<column>: <severity>: <message>
+                 Example: template.liquid:1:1: error: Missing doc
   -h, --help     Show this help message and exit.
   -v, --version  Show version information and exit.
 
@@ -115,7 +120,12 @@ if (args.includes("-v") || args.includes("-V") || args.includes("--version")) {
 	process.exit(0);
 }
 
-console.log("Checking files...");
+const CI_MODE = args.includes("-c") || args.includes("--ci");
+const WARNING_MODE = args.includes("-w") || args.includes("--warn");
+
+if (!CI_MODE) {
+	console.log("Checking files...");
+}
 let found_without_types = 0;
 let errors = [];
 let file_count = 0;
@@ -127,29 +137,48 @@ for (const batch of batch_files(file_path, MAX_BUFFER_SIZE)) {
 		file_count++;
 
 		if (file.liquid_types) {
-			process.stdout.write("✔️");
+			if (!CI_MODE) {
+				process.stdout.write("✔️");
+			}
 			if (file.liquid_types.errors?.length > 0) {
+				// TODO: return line number
 				errors.push(`  Errors: ${file.liquid_types.errors}`);
 			}
 		} else {
-			process.stdout.write("\x1B[31m✖️");
+			if (!CI_MODE) {
+				process.stdout.write("\x1B[31m✖️");
+			} else {
+				let throw_type = WARNING_MODE ? "warning:" : "error:";
+				process.stdout.write(`${file.path}:1:1: ${throw_type} Missing doc\n`);
+			}
 			found_without_types++;
 		}
-		process.stdout.write(` ${file.path}\x1B[39m\n`);
+		if (!CI_MODE) {
+			process.stdout.write(` ${file.path}\x1B[39m\n`);
+		}
 	}
 }
 
-if (errors.length > 0) {
+if (errors.length > 0 && !CI_MODE) {
 	console.warn("\nErrors:");
 	errors.forEach((error) => console.warn(error));
 }
 
 if (found_without_types > 0) {
-	console.log(
-		`\nFound ${found_without_types} liquid file${found_without_types > 1 ? "s" : ""} without doc tags`,
-	);
-	process.exit(1);
+	if (!CI_MODE) {
+		console.log(
+			`\nFound ${found_without_types} liquid file${found_without_types > 1 ? "s" : ""} without doc tags`,
+		);
+	}
+
+	if (WARNING_MODE) {
+		process.exit(0);
+	} else {
+		process.exit(1);
+	}
 } else {
-	console.log(`\n✨ All liquid files (${file_count}) have doc tags`);
+	if (!CI_MODE) {
+		console.log(`\n✨ All liquid files (${file_count}) have doc tags`);
+	}
 	process.exit(0);
 }

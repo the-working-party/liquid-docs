@@ -1,11 +1,16 @@
 use serde::Serialize;
 
-use crate::{DocBlock, Param, ParamType, shopify_liquid_objects::SHOPIFY_ALLOWED_OBJECTS};
+use crate::{DocBlock, Param, ParamType, ParseError, shopify_liquid_objects::SHOPIFY_ALLOWED_OBJECTS};
 
 /// The error types our [LiquidDocs] methods could throw
 #[derive(Debug, PartialEq, Serialize)]
 pub enum ParsingError {
-	MissingParameterName(String),
+	MissingParameterName {
+		line: usize,
+		column: usize,
+		message: String,
+	},
+	// TODO: add line, column and message to MissingOptionalClosingBracket, UnexpectedParameterEnd and UnknownParameterType
 	MissingOptionalClosingBracket(String),
 	UnexpectedParameterEnd(String),
 	UnknownParameterType(String),
@@ -15,13 +20,47 @@ pub enum ParsingError {
 impl std::fmt::Display for ParsingError {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match self {
-			ParsingError::MissingParameterName(line) => write!(f, "Missing parameter near this line:\n{}", line),
+			ParsingError::MissingParameterName { line, column, message } => {
+				write!(f, "Missing parameter on {line}:{column} near this line:\n{message}")
+			},
 			ParsingError::MissingOptionalClosingBracket(line) => {
 				write!(f, "Missing closing bracket for parameter optionality near this line:\n{}", line)
 			},
 			ParsingError::UnexpectedParameterEnd(line) => write!(f, "Unexpected parameter end near this line:\n {}", line),
 			ParsingError::UnknownParameterType(item) => write!(f, "Unknown parameter type: \"{}\"", item),
 			ParsingError::NoDocContentFound => write!(f, "No doc content found"),
+		}
+	}
+}
+
+impl From<ParsingError> for ParseError {
+	fn from(error: ParsingError) -> Self {
+		match error {
+			ParsingError::MissingParameterName { line, column, message } => ParseError {
+				line,
+				column,
+				message: format!("Missing parameter at position {}: {}", column, message),
+			},
+			ParsingError::MissingOptionalClosingBracket(content) => ParseError {
+				line: 0,
+				column: 0,
+				message: format!("Missing closing bracket for parameter optionality: {}", content),
+			},
+			ParsingError::UnexpectedParameterEnd(content) => ParseError {
+				line: 0,
+				column: 0,
+				message: format!("Unexpected parameter end: {}", content),
+			},
+			ParsingError::UnknownParameterType(param_type) => ParseError {
+				line: 0,
+				column: 0,
+				message: format!("Unknown parameter type: {}", param_type),
+			},
+			ParsingError::NoDocContentFound => ParseError {
+				line: 0,
+				column: 0,
+				message: String::from("No documentation content found"),
+			},
 		}
 	}
 }
@@ -188,7 +227,12 @@ impl<'a> LiquidDocs<'a> {
 					let (start_pos, optional) = if let Some((pos, ch)) = parser.chars.peek() {
 						if ch == &'[' { (*pos + 1, true) } else { (*pos, false) }
 					} else {
-						return Err(ParsingError::MissingParameterName(String::from(&content[line_start..])));
+						let (line, column) = parser.get_line_and_column(line_start);
+						return Err(ParsingError::MissingParameterName {
+							line,
+							column,
+							message: String::from(&content[line_start..]),
+						});
 					};
 					param.optional = optional;
 					if optional {
@@ -209,7 +253,12 @@ impl<'a> LiquidDocs<'a> {
 						parser.chars.next(); // consume ']'
 					}
 					if param.name.is_empty() {
-						return Err(ParsingError::MissingParameterName(String::from(&content[line_start..])));
+						let (line, column) = parser.get_line_and_column(line_start);
+						return Err(ParsingError::MissingParameterName {
+							line,
+							column,
+							message: String::from(&content[line_start..]),
+						});
 					}
 					if param.name.contains('\n') {
 						return Err(ParsingError::MissingOptionalClosingBracket(String::from(&content[line_start..])));
@@ -409,6 +458,23 @@ impl<'a> LiquidDocs<'a> {
 		}
 
 		None
+	}
+
+	/// Get the line and column (1 indexed) of a given byte offset in the input stream
+	fn get_line_and_column(&self, byte_offset: usize) -> (usize, usize) {
+		let bytes = self.content.as_bytes();
+		let mut line = 1;
+		let mut last_newline_pos = 0;
+
+		for (i, byte) in bytes.iter().enumerate().take(byte_offset.min(bytes.len())) {
+			if *byte == b'\n' {
+				line += 1;
+				last_newline_pos = i + 1;
+			}
+		}
+
+		let column = byte_offset - last_newline_pos + 1;
+		(line, column)
 	}
 }
 
@@ -931,12 +997,20 @@ Intended for use @ description foo in a block similar to the button block.
 	fn parse_doc_content_param_error_test() {
 		assert_eq!(
 			LiquidDocs::parse_doc_content("Description with words\n @param \n"),
-			Err(ParsingError::MissingParameterName(String::from("@param \n")))
+			Err(ParsingError::MissingParameterName {
+				line: 2,
+				column: 2,
+				message: String::from("@param \n")
+			})
 		);
 
 		assert_eq!(
-			LiquidDocs::parse_doc_content("Description with words\n @param \n @param foo"),
-			Err(ParsingError::MissingParameterName(String::from("@param \n @param foo")))
+			LiquidDocs::parse_doc_content("Description with words\n  @param foo\n  @param \n  @param foo"),
+			Err(ParsingError::MissingParameterName {
+				line: 3,
+				column: 3,
+				message: String::from("@param \n  @param foo")
+			})
 		);
 
 		assert_eq!(
@@ -1192,5 +1266,20 @@ end!
 		assert_eq!(instance.skip_to_tag("endtag", false), Some(22));
 		instance.chars = content.char_indices().peekable();
 		assert_eq!(instance.skip_to_tag("endtag", true), Some(39));
+	}
+
+	#[test]
+	fn get_line_and_column_test() {
+		let content = "12345\n678910\n1112131415\n1617181920";
+		let instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		assert_eq!(&instance.content[4..5], "5");
+		assert_eq!(instance.get_line_and_column(4), (1, 5));
+
+		assert_eq!(&instance.content[19..21], "14");
+		assert_eq!(instance.get_line_and_column(19), (3, 7));
 	}
 }
