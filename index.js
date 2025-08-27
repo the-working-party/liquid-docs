@@ -144,6 +144,9 @@ for (const batch of batch_files(file_path, MAX_BUFFER_SIZE)) {
 			file.liquid_types.errors.forEach(({ line, column, message }) => {
 				if (CI_MODE) {
 					errors.push(`${file.path}:${line}:${column}: warning: ${message}`);
+					process.stdout.write(
+						`::warning file=${file.path},line=${line},col=${column}::${message}\n`,
+					);
 				} else {
 					errors.push(`  \x1B[31m${file.path}\x1B[39m: ${message}`);
 				}
@@ -154,6 +157,9 @@ for (const batch of batch_files(file_path, MAX_BUFFER_SIZE)) {
 			} else {
 				let throw_type = WARNING_MODE ? "warning" : "error";
 				process.stdout.write(`${file.path}:1:1: ${throw_type}: Missing doc\n`);
+				process.stdout.write(
+					`::${throw_type} file=${file.path},line=1,col=1::Missing doc\n`,
+				);
 			}
 			found_without_types++;
 		}
