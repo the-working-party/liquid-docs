@@ -168,17 +168,32 @@ const CHECK_TESTS = [
 	{
 		title: "Single folder test",
 		path: "tests/fixtures/*.liquid",
+		flags: "",
 		pass: true,
 	},
 	{
 		title: "Multiple folders test with failed passes",
 		path: "tests/fixtures/**/*.liquid",
+		flags: "",
 		pass: false,
 	},
 	{
 		title: "Mixed folders test",
 		path: "tests/fixtures/{*.liquid,subfolder/**/*.liquid}",
+		flags: "",
 		pass: true,
+	},
+	{
+		title: "Parsing errors warn",
+		path: "tests/fixtures/fails/parsin_error.liquid",
+		flags: "",
+		pass: true,
+	},
+	{
+		title: "Parsing errors error with flag",
+		path: "tests/fixtures/fails/parsin_error.liquid",
+		flags: "-e",
+		pass: false,
 	},
 ];
 
@@ -188,7 +203,10 @@ CHECK_TESTS.forEach((test) => {
 	process.stdout.write(`Running test "${test.title}" `);
 	let passed;
 	try {
-		execSync(`node ./index.js "${test.path}"`, { encoding: "utf8" });
+		execSync(`node ./index.js "${test.path}" ${test.flags}`, {
+			encoding: "utf8",
+			stdio: ["pipe", "pipe", "pipe"],
+		});
 		passed = true;
 	} catch (error) {
 		passed = false;

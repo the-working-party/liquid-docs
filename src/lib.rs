@@ -4,7 +4,7 @@ mod shopify_liquid_objects;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-pub use liquid_docs::LiquidDocs;
+pub use liquid_docs::{LiquidDocs, ParsingError};
 
 /// The return type for [parse_files]
 #[derive(Debug, Serialize)]
@@ -77,7 +77,11 @@ fn parse_content(input: &str) -> ParseResult {
 			match LiquidDocs::parse_doc_content(block) {
 				Ok(block_type) => result.success.push(block_type),
 				Err(error) => {
-					result.errors.push(error.into());
+					result.errors.push(ParseError {
+						line: error.get_line(),
+						column: error.get_column(),
+						message: error.to_string(),
+					});
 				},
 			}
 		}

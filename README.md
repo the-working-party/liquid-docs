@@ -127,6 +127,8 @@ Checking files...
 ✨ All liquid files (3) have doc tags
 ```
 
+_(exit code = `0`)_
+
 Or when it fails:
 ```sh
 $ liquid-docs-check "{blocks,snippets}/*.liquid"
@@ -137,6 +139,57 @@ Checking files...
 
 Found 1 liquid file without doc tags
 ```
+
+_(exit code = `1`)_
+
+### Checker Options
+
+#### Warn
+Flag: `-w` | `--warn`<br>
+Throw a warning instead of an error on files without doc tags.
+
+```sh
+$ liquid-docs-check "{blocks,snippets}/*.liquid" -w
+✔️ blocks/image_block.liquid
+✖️ blocks/cart-drawer.liquid
+✔️ snippets/card.liquid
+
+Found 1 liquid file without doc tags
+```
+
+_(exit code = `0`)_
+
+#### Error on Parsing
+Flag: `-e` | `--eparse`<br>
+Error on parsing issues.
+Example: unsupported type, missing parameter name etc.
+
+```sh
+$ liquid-docs-check "{blocks,snippets}/*.liquid" -e
+✔️ blocks/image_block.liquid
+✔️ snippets/card.liquid
+
+Parsing errors:
+  tests/fixtures/fails/parsin_error.liquid: Unknown parameter type on 4:10: "unknown"
+
+✨ All liquid files (2) have doc tags
+```
+
+_(exit code = `1`)_
+
+#### CI Mode
+Flag: `-c` | `--ci`<br>
+Run the check in CI mode.
+Output uses GCC diagnostic format for CI annotations:<br>
+`<file>:<line>:<column>: <severity>: <message>`
+
+```sh
+$ liquid-docs-check "{blocks,snippets}/*.liquid" -c
+tests/fixtures/fails/missing_doc.liquid:1:1: error: Missing doc
+tests/fixtures/fails/parsin_error.liquid:4:10: warning: Unknown parameter type on 4:10: "unknown"
+```
+
+### Performance
 
 > [!NOTE]
 > The checker will collect files into 10MB batches to make sure we don't hit
@@ -158,6 +211,7 @@ efficient. JS is only used to interface with the filesystem as WASI isn't mature
 
 ## Releases
 
+- v3.1.0  - Added CI mode, error on parsing issues and warn flags to checker, Improved errors with line and column number
 - v3.0.0  - Extracting legal Shopify objects directly from Shopify codebase, renamed `Unknown` type to `Shopify`
 - v2.0.0  - Added support for unknown types, checker does not error on unknown types anymore
 - v1.1.0  - Added support of array types in param

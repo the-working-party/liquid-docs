@@ -85,7 +85,9 @@ Arguments:
                  Can use glob patterns.
 
 Options:
-  -w, --warn     Warn instead of error on files without doc tags.
+  -w, --warn     Throw a warning instead of an error on files without doc tags.
+  -e, --eparse   Error on parsing issues.
+                 Example: unsupported type, missing parameter name etc
   -c, --ci       Run the check in CI mode.
                  Output uses GCC diagnostic format for CI annotations:
                  <file>:<line>:<column>: <severity>: <message>
@@ -122,6 +124,7 @@ if (args.includes("-v") || args.includes("-V") || args.includes("--version")) {
 
 const CI_MODE = args.includes("-c") || args.includes("--ci");
 const WARNING_MODE = args.includes("-w") || args.includes("--warn");
+const ERROR_ON_PARSE_ISSUES = args.includes("-e") || args.includes("--eparse");
 
 if (!CI_MODE) {
 	console.log("Checking files...");
@@ -140,10 +143,14 @@ for (const batch of batch_files(file_path, MAX_BUFFER_SIZE)) {
 			if (!CI_MODE) {
 				process.stdout.write("✔️");
 			}
-			if (file.liquid_types.errors?.length > 0) {
-				// TODO: return line number
-				errors.push(`  Errors: ${file.liquid_types.errors}`);
-			}
+
+			file.liquid_types.errors.forEach(({ line, column, message }) => {
+				if (CI_MODE) {
+					errors.push(`${file.path}:${line}:${column}: warning: ${message}`);
+				} else {
+					errors.push(`  \x1B[31m${file.path}\x1B[39m: ${message}`);
+				}
+			});
 		} else {
 			if (!CI_MODE) {
 				process.stdout.write("\x1B[31m✖️");
@@ -159,9 +166,10 @@ for (const batch of batch_files(file_path, MAX_BUFFER_SIZE)) {
 	}
 }
 
-if (errors.length > 0 && !CI_MODE) {
-	console.warn("\nErrors:");
-	errors.forEach((error) => console.warn(error));
+if (errors.length > 0) {
+	if (!CI_MODE)
+		console.warn(`\nParsing ${ERROR_ON_PARSE_ISSUES ? "errors" : "warnings"}:`);
+	errors.forEach((error) => console.error(error));
 }
 
 if (found_without_types > 0) {
@@ -170,15 +178,17 @@ if (found_without_types > 0) {
 			`\nFound ${found_without_types} liquid file${found_without_types > 1 ? "s" : ""} without doc tags`,
 		);
 	}
-
-	if (WARNING_MODE) {
-		process.exit(0);
-	} else {
-		process.exit(1);
-	}
 } else {
 	if (!CI_MODE) {
 		console.log(`\n✨ All liquid files (${file_count}) have doc tags`);
 	}
+}
+
+if (
+	(found_without_types > 0 && WARNING_MODE) ||
+	(found_without_types === 0 && !ERROR_ON_PARSE_ISSUES)
+) {
 	process.exit(0);
+} else {
+	process.exit(1);
 }
