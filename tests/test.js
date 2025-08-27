@@ -1,4 +1,4 @@
-const { execSync } = require("child_process");
+const { spawnSync } = require("child_process");
 
 const { parse } = require("../pkg/liquid_docs.js");
 
@@ -168,51 +168,119 @@ const CHECK_TESTS = [
 	{
 		title: "Single folder test",
 		path: "tests/fixtures/*.liquid",
-		flags: "",
+		flags: [],
+		stdout_contains: ["All liquid files (7) have doc tags"],
+		stderr_contains: [],
 		pass: true,
 	},
 	{
 		title: "Multiple folders test with failed passes",
 		path: "tests/fixtures/**/*.liquid",
-		flags: "",
+		flags: [],
+		stdout_contains: [],
+		stderr_contains: [
+			"✖️ tests/fixtures/fails/missing_doc.liquid",
+			'Unknown parameter type on 4:10: "unknown"',
+		],
 		pass: false,
 	},
 	{
 		title: "Mixed folders test",
 		path: "tests/fixtures/{*.liquid,subfolder/**/*.liquid}",
-		flags: "",
+		flags: [],
+		stdout_contains: ["All liquid files (9) have doc tags"],
+		stderr_contains: [],
 		pass: true,
 	},
 	{
 		title: "Parsing errors warn",
 		path: "tests/fixtures/fails/parsin_error.liquid",
-		flags: "",
+		flags: [],
+		stdout_contains: ["✔️ tests/fixtures/fails/parsin_error.liquid"],
+		stderr_contains: ['Unknown parameter type on 4:10: "unknown"'],
 		pass: true,
 	},
 	{
 		title: "Parsing errors error with flag",
 		path: "tests/fixtures/fails/parsin_error.liquid",
-		flags: "-e",
+		flags: ["-e"],
+		stdout_contains: ["✔️ tests/fixtures/fails/parsin_error.liquid"],
+		stderr_contains: ['Unknown parameter type on 4:10: "unknown"'],
+		pass: false,
+	},
+	{
+		title: "CI test with multiple folders",
+		path: "tests/fixtures/**/*.liquid",
+		flags: ["--ci"],
+		stdout_contains: [
+			'::warning file=tests/fixtures/fails/parsin_error.liquid,line=4,col=10::Unknown parameter type on 4:10: "unknown"',
+			"::error file=tests/fixtures/fails/missing_doc.liquid,line=1,col=1::Missing doc",
+		],
+		stderr_contains: [
+			'tests/fixtures/fails/parsin_error.liquid:4:10: warning: Unknown parameter type on 4:10: "unknown"',
+			"tests/fixtures/fails/missing_doc.liquid:1:1: error: Missing doc",
+		],
+		pass: false,
+	},
+	{
+		title: "CI test with multiple folders and warn mode",
+		path: "tests/fixtures/**/*.liquid",
+		flags: ["--ci", "--warn"],
+		stdout_contains: [
+			'::warning file=tests/fixtures/fails/parsin_error.liquid,line=4,col=10::Unknown parameter type on 4:10: "unknown"',
+			"::warning file=tests/fixtures/fails/missing_doc.liquid,line=1,col=1::Missing doc",
+		],
+		stderr_contains: [
+			'tests/fixtures/fails/parsin_error.liquid:4:10: warning: Unknown parameter type on 4:10: "unknown"',
+			"tests/fixtures/fails/missing_doc.liquid:1:1: warning: Missing doc",
+		],
+		pass: true,
+	},
+	{
+		title: "CI test with multiple folders and warn mode and error on parse",
+		path: "tests/fixtures/**/*.liquid",
+		flags: ["--ci", "--warn", "--eparse"],
+		stdout_contains: [
+			'::warning file=tests/fixtures/fails/parsin_error.liquid,line=4,col=10::Unknown parameter type on 4:10: "unknown"',
+			"::warning file=tests/fixtures/fails/missing_doc.liquid,line=1,col=1::Missing doc",
+		],
+		stderr_contains: [
+			'tests/fixtures/fails/parsin_error.liquid:4:10: warning: Unknown parameter type on 4:10: "unknown"',
+			"tests/fixtures/fails/missing_doc.liquid:1:1: warning: Missing doc",
+		],
 		pass: false,
 	},
 ];
 
 console.log("\n\x1B[4mRUNNING CHECK TESTS\x1B[0m");
 failed = 0;
+contained_errors = 0;
 CHECK_TESTS.forEach((test) => {
 	process.stdout.write(`Running test "${test.title}" `);
-	let passed;
-	try {
-		execSync(`node ./index.js "${test.path}" ${test.flags}`, {
+	const { stdout, stderr, status } = spawnSync(
+		"node",
+		["./index.js", test.path, ...test.flags],
+		{
 			encoding: "utf8",
-			stdio: ["pipe", "pipe", "pipe"],
-		});
-		passed = true;
-	} catch (error) {
-		passed = false;
-	}
+		},
+	);
+	passed = status === 0;
 
-	if (passed == test.pass) {
+	test.stdout_contains.forEach((expected) => {
+		if (!stdout.includes(expected)) {
+			console.error(`\nstdout did not contain "${expected}"`);
+			contained_errors++;
+		}
+	});
+
+	test.stderr_contains.forEach((expected) => {
+		if (!stderr.includes(expected)) {
+			console.error(`\nstderr did not contain "${expected}"`);
+			contained_errors++;
+		}
+	});
+
+	if (passed == test.pass && contained_errors == 0) {
 		process.stdout.write("\x1B[42m PASSED \x1B[49m\n");
 	} else {
 		process.stdout.write(`\x1B[41m FAILED \x1B[49m\n`);

@@ -147,43 +147,48 @@ for (const batch of batch_files(file_path, MAX_BUFFER_SIZE)) {
 
 			file.liquid_types.errors.forEach(({ line, column, message }) => {
 				if (CI_MODE) {
-					process.stdout.write(
+					process.stderr.write(
 						`${file.path}:${line}:${column}: warning: ${message}\n`,
 					);
 					process.stdout.write(
 						`::warning file=${file.path},line=${line},col=${column}::${message}\n`,
 					);
+					errors.push(true);
 				} else {
 					errors.push(`  \x1B[31m${file.path}\x1B[39m: ${message}`);
 				}
 			});
 		} else {
 			if (!CI_MODE) {
-				process.stdout.write("\x1B[31m✖️");
+				process.stderr.write("\x1B[31m✖️");
 			} else {
 				let throw_type = WARNING_MODE ? "warning" : "error";
-				process.stdout.write(`${file.path}:1:1: ${throw_type}: Missing doc\n`);
+				process.stderr.write(`${file.path}:1:1: ${throw_type}: Missing doc\n`);
 				process.stdout.write(
 					`::${throw_type} file=${file.path},line=1,col=1::Missing doc\n`,
 				);
 			}
 			found_without_types++;
 		}
+
 		if (!CI_MODE) {
-			process.stdout.write(` ${file.path}\x1B[39m\n`);
+			process[file.liquid_types ? "stdout" : "stderr"].write(
+				` ${file.path}\x1B[39m\n`,
+			);
 		}
 	}
 }
 
-if (errors.length > 0) {
-	if (!CI_MODE)
-		console.warn(`\nParsing ${ERROR_ON_PARSE_ISSUES ? "errors" : "warnings"}:`);
+if (errors.length > 0 && !CI_MODE) {
+	console[ERROR_ON_PARSE_ISSUES ? "error" : "warn"](
+		`\nParsing ${ERROR_ON_PARSE_ISSUES ? "errors" : "warnings"}:`,
+	);
 	errors.forEach((error) => console.error(error));
 }
 
 if (found_without_types > 0) {
 	if (!CI_MODE) {
-		console.log(
+		console[WARNING_MODE ? "warn" : "error"](
 			`\nFound ${found_without_types} liquid file${found_without_types > 1 ? "s" : ""} without doc tags`,
 		);
 	}
@@ -194,10 +199,10 @@ if (found_without_types > 0) {
 }
 
 if (
-	(found_without_types > 0 && WARNING_MODE) ||
-	(found_without_types === 0 && !ERROR_ON_PARSE_ISSUES)
+	(errors.length > 0 && ERROR_ON_PARSE_ISSUES) ||
+	(found_without_types > 0 && !WARNING_MODE)
 ) {
-	process.exit(0);
-} else {
 	process.exit(1);
+} else {
+	process.exit(0);
 }
