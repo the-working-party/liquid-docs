@@ -161,8 +161,8 @@ _(exit code = `0`)_
 
 #### Error on Parsing
 Flag: `-e` | `--eparse`<br>
-Error on parsing issues.
-Example: unsupported type, missing parameter name etc.
+Error on parsing issues (default: warning).
+Parsing issues: unsupported type, missing parameter name etc
 
 ```sh
 $ liquid-docs-check "{blocks,snippets}/*.liquid" -e
@@ -180,13 +180,66 @@ _(exit code = `1`)_
 #### CI Mode
 Flag: `-c` | `--ci`<br>
 Run the check in CI mode.
-Output uses GCC diagnostic format for CI annotations:<br>
-`<file>:<line>:<column>: <severity>: <message>`
+This will output a GCC diagnostic format:<br>
+`<file>:<line>:<column>: <severity>: <message>`<br>
+And a [GitHub annotation format](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-a-warning-message):
+`::<severity> file=<path>,line=<line>[,col=<column>]::<message>`
 
 ```sh
 $ liquid-docs-check "{blocks,snippets}/*.liquid" -c
-tests/fixtures/fails/missing_doc.liquid:1:1: error: Missing doc
 tests/fixtures/fails/parsin_error.liquid:4:10: warning: Unknown parameter type on 4:10: "unknown"
+::warning file=tests/fixtures/fails/parsin_error.liquid,line=4,col=10::Unknown parameter type on 4:10: "unknown"
+tests/fixtures/fails/missing_doc.liquid:1:1: error: Missing doc
+::error file=tests/fixtures/fails/missing_doc.liquid,line=1,col=1::Missing doc
+```
+
+### GitHub Action
+
+In addition to the annotations the checker leaves in CI mode,
+you can also add inline comments with actions like reviewdog:
+
+```yml
+name: Inline Comments
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install liquid-docs
+        run: npm i -g @the-working-party/liquid-docs
+
+      - name: Setup reviewdog
+        uses: reviewdog/action-setup@v1
+        with:
+          reviewdog_version: latest
+
+      - name: Run liquid linter with reviewdog
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          liquid-docs-check "{blocks,snippets}/*.liquid" --ci 2>&1 | \
+            reviewdog \
+              -efm="%f:%l:%c: %t%*[^:]: %m" \
+              -name="liquid-docs" \
+              -reporter=github-pr-review \
+              -filter-mode=nofilter \
 ```
 
 ### Performance

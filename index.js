@@ -83,12 +83,16 @@ Arguments:
 
 Options:
   -w, --warn     Throw a warning instead of an error on files without doc tags.
-  -e, --eparse   Error on parsing issues.
-                 Example: unsupported type, missing parameter name etc
+  -e, --eparse   Error on parsing issues (default: warning).
+                 Parsing issues: unsupported type, missing parameter name etc
   -c, --ci       Run the check in CI mode.
-                 Output uses GCC diagnostic format for CI annotations:
+                 This will output a GCC diagnostic format:
                  <file>:<line>:<column>: <severity>: <message>
-                 Example: template.liquid:1:1: error: Missing doc
+                 And a GitHub annotation format:
+                 ::<severity> file=<path>,line=<line>[,col=<column>]::<message>
+                 Example:
+                   missing_doc.liquid:1:1: error: Missing doc
+                   ::error file=missing_doc.liquid,line=1::Missing doc
   -h, --help     Show this help message and exit.
   -v, --version  Show version information and exit.
 
@@ -143,7 +147,9 @@ for (const batch of batch_files(file_path, MAX_BUFFER_SIZE)) {
 
 			file.liquid_types.errors.forEach(({ line, column, message }) => {
 				if (CI_MODE) {
-					errors.push(`${file.path}:${line}:${column}: warning: ${message}`);
+					process.stdout.write(
+						`${file.path}:${line}:${column}: warning: ${message}\n`,
+					);
 					process.stdout.write(
 						`::warning file=${file.path},line=${line},col=${column}::${message}\n`,
 					);
