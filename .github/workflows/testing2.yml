@@ -1,7 +1,12 @@
 name: Testing
 
 on:
-  push:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
 
 jobs:
   test:
@@ -19,15 +24,20 @@ jobs:
       - name: Build project
         run: npm run build
 
-      - name: CI run
-        run: node index.js "tests/**/*.liquid" -c | tee /tmp/report.txt
-        continue-on-error: true
-
-      - name: Report with reviewdog
-        uses: reviewdog/action-setup@v1.3.2
+      - name: Setup reviewdog
+        uses: reviewdog/action-setup@v1
         with:
-          name: liquid-lint
-          reporter: github-pr-review
-          fail_on_error: false
-          errorformat: "%f:%l:%c: %t%*[a-z]: %m"
-          input: /tmp/report.txt
+          reviewdog_version: latest
+
+      - name: Run liquid linter with reviewdog
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node index.js "tests/**/*.liquid" -c 2>&1 | \
+            reviewdog -f=github-actions \
+                      -name="liquid-linter" \
+                      -reporter=github-pr-review \
+                      -fail-on-error=false
+
+          # Now run again to get the actual exit code for the workflow status
+          node index.js "tests/**/*.liquid" -c
