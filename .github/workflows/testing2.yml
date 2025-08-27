@@ -1,7 +1,7 @@
 name: Testing
 
 on:
-  workflow_call:
+  push:
 
 jobs:
   test:
