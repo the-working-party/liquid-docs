@@ -24,7 +24,7 @@ jobs:
         continue-on-error: true
 
       - name: Report with reviewdog
-        uses: reviewdog/reviewdog@v0.20
+        uses: reviewdog/action-setup@latest
         with:
           name: liquid-lint
           reporter: github-pr-review
