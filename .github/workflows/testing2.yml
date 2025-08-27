@@ -35,10 +35,7 @@ jobs:
         run: |
           node index.js "tests/**/*.liquid" --ci 2>&1 | \
             reviewdog \
-              -efm="%f:%l:%c: error: %m" \
-              -efm="%f:%l:%c: warning: %m" \
+              -efm="%f:%l:%c: %t%*[^:]: %m" \
               -name="liquid-docs" \
               -reporter=github-pr-review \
               -filter-mode=nofilter \
-              -level=info \
-              -tee
