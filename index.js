@@ -88,7 +88,7 @@ Options:
   -c, --ci       Run the check in CI mode.
                  Output uses GCC diagnostic format for CI annotations:
                  ::<severity> file=<path>,line=<line>[,col=<column>]::<message>
-                 Example: template.liquid:1:1: error: Missing doc
+                 Example: ::error file=missing_doc.liquid,line=1::Missing doc
   -h, --help     Show this help message and exit.
   -v, --version  Show version information and exit.
 
@@ -156,7 +156,7 @@ for (const batch of batch_files(file_path, MAX_BUFFER_SIZE)) {
 			} else {
 				let throw_type = WARNING_MODE ? "warning" : "error";
 				process.stdout.write(
-					`::${throw_type} file=${file.path},line=1::Missing doc\n`,
+					`::${throw_type} file=${file.path},line=1,col=1::Missing doc\n`,
 				);
 			}
 			found_without_types++;

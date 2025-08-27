@@ -20,13 +20,14 @@ jobs:
         run: npm run build
 
       - name: CI run
-        run: node index.js "tests/fixtures/**/*.liquid" -c
+        run: node index.js "tests/**/*.liquid" -c | tee /tmp/report.txt
         continue-on-error: true
 
-      - name: CI with parsing errors
-        run: node index.js "tests/fixtures/**/*.liquid" -c -e
-        continue-on-error: true
-
-      - name: CI with warnings and parsing errors
-        run: node index.js "tests/fixtures/**/*.liquid" -c -e -w
-        continue-on-error: true
+      - name: Report with reviewdog
+        uses: reviewdog/reviewdog@v0.17.2
+        with:
+          name: liquid-lint
+          reporter: github-pr-review
+          fail_on_error: false
+          errorformat: "%f:%l:%c: %t%*[a-z]: %m"
+          input: /tmp/report.txt
