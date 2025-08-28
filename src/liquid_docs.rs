@@ -194,14 +194,10 @@ impl<'a> LiquidDocs<'a> {
 					} else {
 						// peek yielded None so we're at the end of the string
 						let (line, column) = parser.get_line_and_column(content.len());
-						let offending_line = match content[line_start..].find('\n') {
-							Some(newline_pos) => String::from(&content[line_start..line_start + newline_pos]),
-							None => String::from(&content[line_start..]),
-						};
 						return Err(ParsingError::UnexpectedParameterEnd {
 							line,
 							column,
-							offending_line,
+							offending_line: parser.cut_till_newline(line_start),
 						});
 					};
 
@@ -211,14 +207,10 @@ impl<'a> LiquidDocs<'a> {
 						if parser.chars.next().is_none() {
 							// next yielded None so we're at the end of the string
 							let (line, column) = parser.get_line_and_column(content.len());
-							let offending_line = match content[line_start..].find('\n') {
-								Some(newline_pos) => String::from(&content[line_start..line_start + newline_pos]),
-								None => String::from(&content[line_start..]),
-							};
 							return Err(ParsingError::UnexpectedParameterEnd {
 								line,
 								column,
-								offending_line,
+								offending_line: parser.cut_till_newline(line_start),
 							});
 						};
 
@@ -263,14 +255,10 @@ impl<'a> LiquidDocs<'a> {
 						} else {
 							// consume_until yielded None so we're at the end of the string
 							let (line, column) = parser.get_line_and_column(content.len());
-							let offending_line = match content[line_start..].find('\n') {
-								Some(newline_pos) => String::from(&content[line_start..line_start + newline_pos]),
-								None => String::from(&content[line_start..]),
-							};
 							return Err(ParsingError::UnexpectedParameterEnd {
 								line,
 								column,
-								offending_line,
+								offending_line: parser.cut_till_newline(line_start),
 							});
 						}
 
@@ -285,14 +273,10 @@ impl<'a> LiquidDocs<'a> {
 						// peek yielded None so we're at the end of the string
 						// note: this code path is caught by UnexpectedParameterEnd above but we leave it here for completeness
 						let (line, column) = parser.get_line_and_column(content.len());
-						let offending_line = match content[line_start..].find('\n') {
-							Some(newline_pos) => String::from(&content[line_start..line_start + newline_pos]),
-							None => String::from(&content[line_start..]),
-						};
 						return Err(ParsingError::MissingParameterName {
 							line,
 							column,
-							offending_line,
+							offending_line: parser.cut_till_newline(line_start),
 						});
 					};
 					param.optional = optional;
@@ -308,14 +292,10 @@ impl<'a> LiquidDocs<'a> {
 							Some(index) => index,
 							None => {
 								let (line, column) = parser.get_line_and_column(current_column);
-								let offending_line = match content[line_start..].find('\n') {
-									Some(newline_pos) => String::from(&content[line_start..line_start + newline_pos]),
-									None => String::from(&content[line_start..]),
-								};
 								return Err(ParsingError::MissingOptionalClosingBracket {
 									line,
 									column,
-									offending_line,
+									offending_line: parser.cut_till_newline(line_start),
 								});
 							},
 						}
@@ -332,26 +312,18 @@ impl<'a> LiquidDocs<'a> {
 					if param.name.is_empty() {
 						let (line, _) = parser.get_line_and_column(line_start);
 						let (_, column) = parser.get_line_and_column(end_pos);
-						let offending_line = match content[line_start..].find('\n') {
-							Some(newline_pos) => String::from(&content[line_start..line_start + newline_pos]),
-							None => String::from(&content[line_start..]),
-						};
 						return Err(ParsingError::MissingParameterName {
 							line,
 							column,
-							offending_line,
+							offending_line: parser.cut_till_newline(line_start),
 						});
 					}
 					if param.name.contains('\n') {
 						let (line, column) = parser.get_line_and_column(current_column);
-						let offending_line = match content[line_start..].find('\n') {
-							Some(newline_pos) => String::from(&content[line_start..line_start + newline_pos]),
-							None => String::from(&content[line_start..]),
-						};
 						return Err(ParsingError::MissingOptionalClosingBracket {
 							line,
 							column,
-							offending_line,
+							offending_line: parser.cut_till_newline(line_start),
 						});
 					}
 
@@ -566,6 +538,14 @@ impl<'a> LiquidDocs<'a> {
 
 		let column = byte_offset - last_newline_pos + 1;
 		(line, column)
+	}
+
+	/// Allocate a new String from line_start till next newline character
+	fn cut_till_newline(&self, line_start: usize) -> String {
+		match self.content[line_start..].find('\n') {
+			Some(newline_pos) => String::from(&self.content[line_start..line_start + newline_pos]),
+			None => String::from(&self.content[line_start..]),
+		}
 	}
 }
 
@@ -1424,5 +1404,18 @@ end!
 
 		assert_eq!(&instance.content[24..30], "@param");
 		assert_eq!(instance.get_line_and_column(24), (2, 2));
+	}
+
+	#[test]
+	fn cut_till_newline_test() {
+		let content = "12345\n678910\n1112131415\n1617181920";
+		let instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		assert_eq!(&instance.content[6..7], "6");
+		assert_eq!(instance.cut_till_newline(6), String::from("678910"));
+		assert_eq!(instance.cut_till_newline(8), String::from("8910"));
 	}
 }

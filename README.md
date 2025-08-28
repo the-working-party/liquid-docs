@@ -199,7 +199,7 @@ In addition to the annotations the checker leaves in CI mode,
 you can also add inline comments with actions like reviewdog:
 
 ```yml
-name: Inline Comments
+name: Testing liquid files
 
 on:
   pull_request:
@@ -210,7 +210,7 @@ permissions:
   checks: write
 
 jobs:
-  test:
+  liquid-docs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -219,9 +219,6 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
 
-      - name: Install dependencies
-        run: npm ci
-      
       - name: Install liquid-docs
         run: npm i -g @the-working-party/liquid-docs
 
@@ -230,12 +227,13 @@ jobs:
         with:
           reviewdog_version: latest
 
-      - name: Run liquid linter with reviewdog
+      - name: Run liquid-docs with reviewdog
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           liquid-docs-check "{blocks,snippets}/*.liquid" --ci 2>&1 | \
             reviewdog \
+              -efm="%-G::%.%#" \
               -efm="%f:%l:%c: %t%*[^:]: %m" \
               -name="liquid-docs" \
               -reporter=github-pr-review \
