@@ -5,23 +5,82 @@ use crate::{DocBlock, Param, ParamType, shopify_liquid_objects::SHOPIFY_ALLOWED_
 /// The error types our [LiquidDocs] methods could throw
 #[derive(Debug, PartialEq, Serialize)]
 pub enum ParsingError {
-	MissingParameterName(String),
-	MissingOptionalClosingBracket(String),
-	UnexpectedParameterEnd(String),
-	UnknownParameterType(String),
+	MissingParameterName {
+		line: usize,
+		column: usize,
+		offending_line: String,
+	},
+	MissingOptionalClosingBracket {
+		line: usize,
+		column: usize,
+		offending_line: String,
+	},
+	UnexpectedParameterEnd {
+		line: usize,
+		column: usize,
+		offending_line: String,
+	},
+	UnknownParameterType {
+		line: usize,
+		column: usize,
+		offending_type: String,
+	},
 	NoDocContentFound,
 }
 
 impl std::fmt::Display for ParsingError {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match self {
-			ParsingError::MissingParameterName(line) => write!(f, "Missing parameter near this line:\n{}", line),
-			ParsingError::MissingOptionalClosingBracket(line) => {
-				write!(f, "Missing closing bracket for parameter optionality near this line:\n{}", line)
+			ParsingError::MissingParameterName {
+				line,
+				column,
+				offending_line,
+			} => {
+				write!(f, "Missing parameter on {line}:{column} near this line:\n{offending_line}")
 			},
-			ParsingError::UnexpectedParameterEnd(line) => write!(f, "Unexpected parameter end near this line:\n {}", line),
-			ParsingError::UnknownParameterType(item) => write!(f, "Unknown parameter type: \"{}\"", item),
+			ParsingError::MissingOptionalClosingBracket {
+				line,
+				column,
+				offending_line,
+			} => {
+				write!(
+					f,
+					"Missing closing bracket for parameter optionality on {line}:{column} near this line:\n{offending_line}"
+				)
+			},
+			ParsingError::UnexpectedParameterEnd {
+				line,
+				column,
+				offending_line,
+			} => write!(f, "Unexpected parameter end on {line}:{column} near this line:\n {offending_line}"),
+			ParsingError::UnknownParameterType {
+				line,
+				column,
+				offending_type,
+			} => write!(f, "Unknown parameter type on {line}:{column}: \"{offending_type}\"",),
 			ParsingError::NoDocContentFound => write!(f, "No doc content found"),
+		}
+	}
+}
+
+impl ParsingError {
+	pub fn get_line(&self) -> usize {
+		match self {
+			ParsingError::MissingParameterName { line, .. } => *line,
+			ParsingError::MissingOptionalClosingBracket { line, .. } => *line,
+			ParsingError::UnexpectedParameterEnd { line, .. } => *line,
+			ParsingError::UnknownParameterType { line, .. } => *line,
+			ParsingError::NoDocContentFound => 0,
+		}
+	}
+
+	pub fn get_column(&self) -> usize {
+		match self {
+			ParsingError::MissingParameterName { column, .. } => *column,
+			ParsingError::MissingOptionalClosingBracket { column, .. } => *column,
+			ParsingError::UnexpectedParameterEnd { column, .. } => *column,
+			ParsingError::UnknownParameterType { column, .. } => *column,
+			ParsingError::NoDocContentFound => 0,
 		}
 	}
 }
@@ -102,7 +161,7 @@ impl<'a> LiquidDocs<'a> {
 		while let Some((line_start, ch)) = parser.chars.next() {
 			// description without @description
 			if doc_block.description.is_empty() && ch != '@' {
-				let end_pos = parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
+				let end_pos = parser.consume_until_either(&["@param", "@example", "@description"]).unwrap_or(content.len());
 				doc_block.description = String::from(content[line_start..end_pos].trim());
 			}
 
@@ -114,8 +173,7 @@ impl<'a> LiquidDocs<'a> {
 					parser.consume_whitespace();
 
 					let start_pos = parser.chars.peek().map(|(pos, _)| *pos).unwrap_or(content.len());
-					let end_pos =
-						parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
+					let end_pos = parser.consume_until_either(&["@param", "@example", "@description"]).unwrap_or(content.len());
 
 					if end_pos > start_pos {
 						if let Some(stripped) = content[start_pos..end_pos].trim().strip_prefix('-') {
@@ -134,13 +192,26 @@ impl<'a> LiquidDocs<'a> {
 					let (start_pos, ch) = if let Some((pos, ch)) = parser.chars.peek() {
 						(*pos, *ch)
 					} else {
-						return Err(ParsingError::UnexpectedParameterEnd(String::from(&content[line_start..])));
+						// peek yielded None so we're at the end of the string
+						let (line, column) = parser.get_line_and_column(content.len());
+						return Err(ParsingError::UnexpectedParameterEnd {
+							line,
+							column,
+							offending_line: parser.cut_till_newline(line_start),
+						});
 					};
 
 					// @param type (optional)
 					if ch == '{' {
+						parser.chars.next(); // consume '{'
 						if parser.chars.next().is_none() {
-							return Err(ParsingError::UnexpectedParameterEnd(String::from(&content[line_start..])));
+							// next yielded None so we're at the end of the string
+							let (line, column) = parser.get_line_and_column(content.len());
+							return Err(ParsingError::UnexpectedParameterEnd {
+								line,
+								column,
+								offending_line: parser.cut_till_newline(line_start),
+							});
 						};
 
 						if let Some(end_pos) = parser.consume_until("}") {
@@ -165,7 +236,12 @@ impl<'a> LiquidDocs<'a> {
 									|| SHOPIFY_ALLOWED_OBJECTS.contains(&type_name);
 
 								if !is_valid_param_type {
-									return Err(ParsingError::UnknownParameterType(String::from(type_name)));
+									let (line, column) = parser.get_line_and_column(start_pos);
+									return Err(ParsingError::UnknownParameterType {
+										line,
+										column,
+										offending_type: String::from(type_name),
+									});
 								} else {
 									ParamType::Shopify(String::from(type_name))
 								}
@@ -177,7 +253,13 @@ impl<'a> LiquidDocs<'a> {
 								param.type_ = Some(explicit_type);
 							}
 						} else {
-							return Err(ParsingError::UnexpectedParameterEnd(String::from(&content[line_start..])));
+							// consume_until yielded None so we're at the end of the string
+							let (line, column) = parser.get_line_and_column(content.len());
+							return Err(ParsingError::UnexpectedParameterEnd {
+								line,
+								column,
+								offending_line: parser.cut_till_newline(line_start),
+							});
 						}
 
 						parser.chars.next(); // consume '}'
@@ -188,7 +270,14 @@ impl<'a> LiquidDocs<'a> {
 					let (start_pos, optional) = if let Some((pos, ch)) = parser.chars.peek() {
 						if ch == &'[' { (*pos + 1, true) } else { (*pos, false) }
 					} else {
-						return Err(ParsingError::MissingParameterName(String::from(&content[line_start..])));
+						// peek yielded None so we're at the end of the string
+						// note: this code path is caught by UnexpectedParameterEnd above but we leave it here for completeness
+						let (line, column) = parser.get_line_and_column(content.len());
+						return Err(ParsingError::MissingParameterName {
+							line,
+							column,
+							offending_line: parser.cut_till_newline(line_start),
+						});
 					};
 					param.optional = optional;
 					if optional {
@@ -197,22 +286,45 @@ impl<'a> LiquidDocs<'a> {
 
 					// @param name
 					parser.consume_whitespace_until_newline();
+					let current_column = parser.chars.peek().map(|&(c, _)| c).unwrap_or(line_start);
 					let end_pos = if optional {
-						parser
-							.consume_until("]")
-							.ok_or(ParsingError::MissingOptionalClosingBracket(String::from(&content[line_start..])))?
+						match parser.consume_until("]") {
+							Some(index) => index,
+							None => {
+								let (line, column) = parser.get_line_and_column(current_column);
+								return Err(ParsingError::MissingOptionalClosingBracket {
+									line,
+									column,
+									offending_line: parser.cut_till_newline(line_start),
+								});
+							},
+						}
 					} else {
 						parser.consume_until_either(&[" ", "\n"]).unwrap_or(content.len())
 					};
+
 					param.name = String::from(content[start_pos..end_pos].trim());
+
 					if optional {
 						parser.chars.next(); // consume ']'
 					}
+
 					if param.name.is_empty() {
-						return Err(ParsingError::MissingParameterName(String::from(&content[line_start..])));
+						let (line, _) = parser.get_line_and_column(line_start);
+						let (_, column) = parser.get_line_and_column(end_pos);
+						return Err(ParsingError::MissingParameterName {
+							line,
+							column,
+							offending_line: parser.cut_till_newline(line_start),
+						});
 					}
 					if param.name.contains('\n') {
-						return Err(ParsingError::MissingOptionalClosingBracket(String::from(&content[line_start..])));
+						let (line, column) = parser.get_line_and_column(current_column);
+						return Err(ParsingError::MissingOptionalClosingBracket {
+							line,
+							column,
+							offending_line: parser.cut_till_newline(line_start),
+						});
 					}
 
 					// @param description (optional)
@@ -409,6 +521,31 @@ impl<'a> LiquidDocs<'a> {
 		}
 
 		None
+	}
+
+	/// Get the line and column (1 indexed) of a given byte offset in the input stream
+	fn get_line_and_column(&self, byte_offset: usize) -> (usize, usize) {
+		let bytes = self.content.as_bytes();
+		let mut line = 1;
+		let mut last_newline_pos = 0;
+
+		for (i, byte) in bytes.iter().enumerate().take(byte_offset.min(bytes.len())) {
+			if *byte == b'\n' {
+				line += 1;
+				last_newline_pos = i + 1;
+			}
+		}
+
+		let column = byte_offset - last_newline_pos + 1;
+		(line, column)
+	}
+
+	/// Allocate a new String from line_start till next newline character
+	fn cut_till_newline(&self, line_start: usize) -> String {
+		match self.content[line_start..].find('\n') {
+			Some(newline_pos) => String::from(&self.content[line_start..line_start + newline_pos]),
+			None => String::from(&self.content[line_start..]),
+		}
 	}
 }
 
@@ -930,35 +1067,86 @@ Intended for use @ description foo in a block similar to the button block.
 	#[test]
 	fn parse_doc_content_param_error_test() {
 		assert_eq!(
-			LiquidDocs::parse_doc_content("Description with words\n @param \n"),
-			Err(ParsingError::MissingParameterName(String::from("@param \n")))
-		);
-
-		assert_eq!(
-			LiquidDocs::parse_doc_content("Description with words\n @param \n @param foo"),
-			Err(ParsingError::MissingParameterName(String::from("@param \n @param foo")))
+			LiquidDocs::parse_doc_content("Description with words\n @param"),
+			Err(ParsingError::UnexpectedParameterEnd {
+				line: 2,
+				column: 8,
+				offending_line: String::from("@param")
+			})
 		);
 
 		assert_eq!(
 			LiquidDocs::parse_doc_content("Description with words\n @param "),
-			Err(ParsingError::UnexpectedParameterEnd(String::from("@param ")))
+			Err(ParsingError::UnexpectedParameterEnd {
+				line: 2,
+				column: 9,
+				offending_line: String::from("@param ")
+			})
+		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content("Description with words\n  @param foo\n  @param \n  @param foo"),
+			Err(ParsingError::MissingParameterName {
+				line: 3,
+				column: 10,
+				offending_line: String::from("@param ")
+			})
+		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content("Description with words\n @param "),
+			Err(ParsingError::UnexpectedParameterEnd {
+				line: 2,
+				column: 9,
+				offending_line: String::from("@param ")
+			})
+		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content("Description with words\n @param {"),
+			Err(ParsingError::UnexpectedParameterEnd {
+				line: 2,
+				column: 10,
+				offending_line: String::from("@param {")
+			})
 		);
 
 		assert_eq!(LiquidDocs::parse_doc_content(""), Err(ParsingError::NoDocContentFound));
 
 		assert_eq!(
 			LiquidDocs::parse_doc_content("Description with words\n @param [foo bar"),
-			Err(ParsingError::MissingOptionalClosingBracket(String::from("@param [foo bar")))
+			Err(ParsingError::MissingOptionalClosingBracket {
+				line: 2,
+				column: 10,
+				offending_line: String::from("@param [foo bar")
+			})
+		);
+
+		assert_eq!(
+			LiquidDocs::parse_doc_content("Description with words\n @param [foo\nbar] bar"),
+			Err(ParsingError::MissingOptionalClosingBracket {
+				line: 2,
+				column: 10,
+				offending_line: String::from("@param [foo")
+			})
 		);
 
 		assert_eq!(
 			LiquidDocs::parse_doc_content("Description with words\n @param {string foo bar"),
-			Err(ParsingError::UnexpectedParameterEnd(String::from("@param {string foo bar")))
+			Err(ParsingError::UnexpectedParameterEnd {
+				line: 2,
+				column: 24,
+				offending_line: String::from("@param {string foo bar"),
+			})
 		);
 
 		assert_eq!(
 			LiquidDocs::parse_doc_content("Description with words\n @param {unknown} foo - bar\n\n end\n"),
-			Err(ParsingError::UnknownParameterType(String::from("unknown")))
+			Err(ParsingError::UnknownParameterType {
+				line: 2,
+				column: 9,
+				offending_type: String::from("unknown"),
+			})
 		);
 	}
 
@@ -1192,5 +1380,42 @@ end!
 		assert_eq!(instance.skip_to_tag("endtag", false), Some(22));
 		instance.chars = content.char_indices().peekable();
 		assert_eq!(instance.skip_to_tag("endtag", true), Some(39));
+	}
+
+	#[test]
+	fn get_line_and_column_test() {
+		let content = "12345\n678910\n1112131415\n1617181920";
+		let instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		assert_eq!(&instance.content[4..5], "5");
+		assert_eq!(instance.get_line_and_column(4), (1, 5));
+
+		assert_eq!(&instance.content[19..21], "14");
+		assert_eq!(instance.get_line_and_column(19), (3, 7));
+
+		let content = "Description with words\n @param {string foo bar";
+		let instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		assert_eq!(&instance.content[24..30], "@param");
+		assert_eq!(instance.get_line_and_column(24), (2, 2));
+	}
+
+	#[test]
+	fn cut_till_newline_test() {
+		let content = "12345\n678910\n1112131415\n1617181920";
+		let instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		assert_eq!(&instance.content[6..7], "6");
+		assert_eq!(instance.cut_till_newline(6), String::from("678910"));
+		assert_eq!(instance.cut_till_newline(8), String::from("8910"));
 	}
 }
