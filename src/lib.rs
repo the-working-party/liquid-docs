@@ -4,7 +4,7 @@ mod shopify_liquid_objects;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-pub use liquid_docs::{LiquidDocs, ParsingError};
+pub use liquid_docs::LiquidDocs;
 
 /// The return type for [parse_files]
 #[derive(Debug, Serialize)]

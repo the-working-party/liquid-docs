@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const glob = require("glob");
 
-const { parse, parse_batch, TwpTypes } = require("./pkg/liquid_docs.js");
+const { parse, parse_batch } = require("./pkg/liquid_docs.js");
 
 // Process files in buffer-based batches for optimal performance
 // 10MB batches balance memory usage and WASM boundary crossing overhead
@@ -57,7 +57,6 @@ module.exports = {
 	parse,
 	parse_batch,
 	parse_files,
-	TwpTypes,
 };
 
 function help() {

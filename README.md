@@ -41,12 +41,7 @@ npm i @the-working-party/liquid-docs
 ```
 
 ```js
-const {
-	get_files,   // a helper function to get all files from a glob
-	parse,       // parse the input of a single file
-	parse_files, // parse a list of files
-	TwpTypes,    // the parser struct from Rust
-} = require("@the-working-party/liquid-docs");
+const { parse } = require("@the-working-party/liquid-docs");
 
 // An example liquid snippet file
 const result = parse(`
