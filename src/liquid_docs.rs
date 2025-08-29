@@ -117,7 +117,7 @@ impl<'a> LiquidDocs<'a> {
 				parser.consume_whitespace();
 
 				if parser.peek_matches("#") {
-					parser.skip_to_tag_close();
+					parser.consume_till_tag_close();
 					continue;
 				}
 
@@ -133,7 +133,7 @@ impl<'a> LiquidDocs<'a> {
 
 				if parser.peek_matches("doc") {
 					parser.consume_chars(3);
-					let doc_content_start = parser.skip_to_tag_close()?;
+					let doc_content_start = parser.consume_till_tag_close()?;
 					let doc_content_end = parser.skip_to_tag("enddoc", false)?;
 					blocks.push(&content[doc_content_start..doc_content_end]);
 					found_blocks += 1;
@@ -357,8 +357,7 @@ impl<'a> LiquidDocs<'a> {
 					} else {
 						content.len()
 					};
-					let end_pos =
-						parser.consume_until_either(&["@param ", "@example ", "@description "]).unwrap_or(content.len());
+					let end_pos = parser.consume_until_either(&["@param", "@example", "@description"]).unwrap_or(content.len());
 
 					let mut example = String::new();
 					let indentation_level = &content[start_pos..end_pos].chars().take_while(|c| c.is_whitespace()).count();
@@ -448,19 +447,25 @@ impl<'a> LiquidDocs<'a> {
 		}
 	}
 
-	/// Move to position after next %}
-	fn skip_to_tag_close(&mut self) -> Option<usize> {
+	/// Consume until we find next %} and return the position
+	fn consume_till_tag_close(&mut self) -> Option<usize> {
 		self.consume_whitespace();
 		self.skip_dash();
-		if let Some((_, ch)) = self.chars.peek()
-			&& *ch == '%'
-		{
-			self.chars.next(); // consume '%'
-			if self.chars.peek().map(|(_, c)| *c) == Some('}') {
-				self.chars.next(); // consume '}'
-				return self.chars.peek().map(|(pos, _)| *pos).or(Some(self.content.len()));
+
+		while let Some((_, ch)) = self.chars.peek() {
+			if *ch == '%' {
+				self.chars.next(); // consume '%'
+
+				if self.chars.peek().map(|(_, c)| *c) == Some('}') {
+					self.chars.next(); // consume '}'
+
+					return self.chars.peek().map(|(pos, _)| *pos).or(Some(self.content.len()));
+				}
+			} else {
+				self.chars.next(); // consume and continue
 			}
 		}
+
 		None
 	}
 
@@ -470,7 +475,7 @@ impl<'a> LiquidDocs<'a> {
 			return None;
 		}
 
-		let first_char = target.chars().next()?;
+		let first_char = target.chars().next().unwrap(); // safe because we just checked that target is not empty
 		let target_len = target.len();
 
 		while let Some((pos, ch)) = self.chars.peek() {
@@ -513,7 +518,7 @@ impl<'a> LiquidDocs<'a> {
 			if self.peek_matches(tag) {
 				if return_end {
 					self.consume_chars(tag.len());
-					return self.skip_to_tag_close();
+					return self.consume_till_tag_close();
 				} else {
 					return Some(saved_position);
 				}
@@ -576,6 +581,8 @@ mod tests {
 		assert_eq!(LiquidDocs::extract_doc_blocks("{%doc%}test{%enddoc%}test"), Some(vec!["test"]));
 		assert_eq!(LiquidDocs::extract_doc_blocks("{% raw %}{% doc %}test{% enddoc %}{% endraw %}test"), None);
 		assert_eq!(LiquidDocs::extract_doc_blocks("{% raw %}{% doc %}test{% enddoc %}{% endraw %}test"), None);
+		assert_eq!(LiquidDocs::extract_doc_blocks("test {% # {% doc %}test{% enddoc %} test"), None);
+		assert_eq!(LiquidDocs::extract_doc_blocks("test {% doc %} test"), None);
 		assert_eq!(LiquidDocs::extract_doc_blocks("{% comment %}{% doc %}test{% enddoc %}{% endcomment %}test"), None);
 		assert_eq!(LiquidDocs::extract_doc_blocks("{% doc %}{% enddoc %}"), Some(vec![""]));
 
@@ -823,7 +830,11 @@ Intended for use @ description foo in a block similar to the button block.
 
   @example
   {% render 'button', link: '/collections/all' %}
-"#
+
+  @example
+  test
+
+  @example"#
 			),
 			Ok(DocBlock {
 				description: String::from(
@@ -853,7 +864,8 @@ Intended for use @ description foo in a block similar to the button block.
 					String::from(
 						"{% raw %}\n  {% render 'button', link: '@/collections/all' %}\n  sadsad @ param asdasd\n{% endraw %}\n\ntest"
 					),
-					String::from("{% render 'button', link: '/collections/all' %}")
+					String::from("{% render 'button', link: '/collections/all' %}"),
+					String::from("test")
 				]
 			})
 		);
@@ -876,7 +888,7 @@ Intended for use @ description foo in a block similar to the button block.
 	#[test]
 	fn parse_doc_content_param_param_test() {
 		assert_eq!(
-			LiquidDocs::parse_doc_content("@param foo"),
+			LiquidDocs::parse_doc_content("@param foo "),
 			Ok(DocBlock {
 				description: String::new(),
 				param: vec![Param {
@@ -1276,10 +1288,12 @@ Intended for use @ description foo in a block similar to the button block.
 		assert_eq!(instance.chars.next(), Some((2, '2')));
 		instance.consume_chars(5);
 		assert_eq!(instance.chars.next(), Some((8, '8')));
+		instance.consume_chars(10);
+		assert_eq!(instance.chars.next(), None);
 	}
 
 	#[test]
-	fn skip_to_tag_close_test() {
+	fn consume_till_tag_close_test() {
 		let content = "{% tag %}end";
 		let mut instance = LiquidDocs {
 			content,
@@ -1289,16 +1303,22 @@ Intended for use @ description foo in a block similar to the button block.
 		assert_eq!(instance.chars.next(), Some((0, '{')));
 		assert_eq!(instance.chars.next(), Some((1, '%')));
 		assert_eq!(instance.chars.next(), Some((2, ' ')));
-		instance.skip_to_tag_close();
-		assert_eq!(instance.chars.next(), Some((3, 't')));
-		instance.skip_to_tag_close();
-		assert_eq!(instance.chars.next(), Some((4, 'a')));
-		instance.skip_to_tag_close();
-		assert_eq!(instance.chars.next(), Some((5, 'g')));
-		instance.skip_to_tag_close();
+		assert_eq!(instance.consume_till_tag_close(), Some(9));
 		assert_eq!(instance.chars.next(), Some((9, 'e')));
-		instance.skip_to_tag_close();
-		assert_eq!(instance.chars.next(), Some((10, 'n')));
+
+		let content = "{% # } % %}end";
+		let mut instance = LiquidDocs {
+			content,
+			chars: content.char_indices().peekable(),
+		};
+
+		assert_eq!(instance.chars.next(), Some((0, '{')));
+		assert_eq!(instance.chars.next(), Some((1, '%')));
+		assert_eq!(instance.chars.next(), Some((2, ' ')));
+		instance.consume_till_tag_close();
+		assert_eq!(instance.chars.next(), Some((11, 'e')));
+		instance.consume_till_tag_close();
+		assert_eq!(instance.chars.next(), None);
 	}
 
 	#[test]
@@ -1337,6 +1357,15 @@ Intended for use @ description foo in a block similar to the button block.
 			.consume_until("te"),
 			Some(7)
 		);
+
+		assert_eq!(
+			LiquidDocs {
+				content,
+				chars: content.char_indices().peekable(),
+			}
+			.consume_until(""),
+			None
+		);
 	}
 
 	#[test]
@@ -1347,7 +1376,7 @@ Intended for use @ description foo in a block similar to the button block.
 				content,
 				chars: content.char_indices().peekable(),
 			}
-			.consume_until_either(&["@param ", "@example ", "@description "]),
+			.consume_until_either(&["@param", "@example", "@description"]),
 			Some(6)
 		);
 
@@ -1361,7 +1390,7 @@ end!
 				content,
 				chars: content.char_indices().peekable(),
 			}
-			.consume_until_either(&["@param ", "@example ", "@description "]),
+			.consume_until_either(&["@param", "@example", "@description"]),
 			Some(39)
 		);
 	}
