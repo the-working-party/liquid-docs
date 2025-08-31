@@ -2,7 +2,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import * as glob from "glob";
+import { globSync } from "glob";
 
 import {
 	parse_batch,
@@ -18,7 +18,7 @@ function* batch_files(
 	file_path: string,
 	max_buffer_size: number = MAX_BUFFER_SIZE,
 ): Generator<FileInput[]> {
-	const files = glob.sync(file_path, { cwd: process.cwd() });
+	const files = globSync(file_path, { cwd: process.cwd(), nodir: true });
 	let batch: FileInput[] = [];
 	let current_size = 0;
 

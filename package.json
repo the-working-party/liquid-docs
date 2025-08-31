@@ -1,6 +1,6 @@
 {
 	"name": "@the-working-party/liquid-docs",
-	"version": "3.1.0",
+	"version": "3.2.0",
 	"description": "A parser for Shopify liquid doc tags using Rust/WASM",
 	"bin": {
 		"liquid-docs-check": "index.js"

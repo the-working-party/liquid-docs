@@ -257,6 +257,7 @@ efficient. JS is only used to interface with the filesystem as WASI isn't mature
 
 ## Releases
 
+- v3.2.0  - Converted JavaScript wrapper to TypeScript, fixed small parser bugs
 - v3.1.0  - Added CI mode, error on parsing issues and warn flags to checker, Improved errors with line and column number
 - v3.0.0  - Extracting legal Shopify objects directly from Shopify codebase, renamed `Unknown` type to `Shopify`
 - v2.0.0  - Added support for unknown types, checker does not error on unknown types anymore

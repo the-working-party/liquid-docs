@@ -120,6 +120,6 @@ pub fn parse_batch(files: Vec<FileInput>) -> Vec<LiquidFile> {
 
 /// Parse a string of Liquid code and return Vec<DocBlock>
 #[wasm_bindgen]
-pub fn parse(input: String) -> Result<ParseResult, JsValue> {
-	Ok(parse_content(&input))
+pub fn parse(input: String) -> ParseResult {
+	parse_content(&input)
 }
