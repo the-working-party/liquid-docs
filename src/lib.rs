@@ -2,19 +2,22 @@ mod liquid_docs;
 mod shopify_liquid_objects;
 
 use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
 pub use liquid_docs::LiquidDocs;
 
 /// The return type for [parse_files]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct LiquidFile {
 	pub path: String,
 	pub liquid_types: Option<ParseResult>,
 }
 
 /// The error type for [parse]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct ParseError {
 	line: usize,
 	column: usize,
@@ -22,14 +25,16 @@ pub struct ParseError {
 }
 
 /// The return type for [parse]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct ParseResult {
 	pub success: Vec<DocBlock>,
 	pub errors: Vec<ParseError>,
 }
 
 /// The three different things Shopify supports inside doc tags
-#[derive(Debug, Default, Serialize, PartialEq)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct DocBlock {
 	pub description: String,
 	pub param: Vec<Param>,
@@ -37,7 +42,8 @@ pub struct DocBlock {
 }
 
 /// The different types a parameter can be
-#[derive(Debug, Serialize, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ParamType {
 	#[default]
 	String,
@@ -49,7 +55,8 @@ pub enum ParamType {
 }
 
 /// Type of param type within doc a tag
-#[derive(Debug, Serialize, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Param {
 	pub name: String,
 	pub description: Option<String>,
@@ -59,7 +66,8 @@ pub struct Param {
 }
 
 /// Input type for [parse_files]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct FileInput {
 	path: String,
 	content: String,
@@ -92,9 +100,7 @@ fn parse_content(input: &str) -> ParseResult {
 
 /// Parse a Vec<FileInput> and return Vec<LiquidFile>
 #[wasm_bindgen]
-pub fn parse_batch(input: JsValue) -> Result<JsValue, JsValue> {
-	let files: Vec<FileInput> = serde_wasm_bindgen::from_value(input).map_err(|e| JsValue::from_str(&e.to_string()))?;
-
+pub fn parse_batch(files: Vec<FileInput>) -> Vec<LiquidFile> {
 	let mut all_files = Vec::with_capacity(files.len());
 
 	for file in files {
@@ -109,12 +115,11 @@ pub fn parse_batch(input: JsValue) -> Result<JsValue, JsValue> {
 		});
 	}
 
-	serde_wasm_bindgen::to_value(&all_files).map_err(|e| JsValue::from_str(&e.to_string()))
+	all_files
 }
 
 /// Parse a string of Liquid code and return Vec<DocBlock>
 #[wasm_bindgen]
-pub fn parse(input: String) -> Result<JsValue, JsValue> {
-	let result = parse_content(&input);
-	serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+pub fn parse(input: String) -> Result<ParseResult, JsValue> {
+	Ok(parse_content(&input))
 }

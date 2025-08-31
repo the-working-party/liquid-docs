@@ -6,10 +6,13 @@
 		"liquid-docs-check": "index.js"
 	},
 	"main": "./index.js",
-	"types": "pkg/twp_types.d.ts",
+	"types": "./index.d.ts",
 	"files": [
 		"pkg/**/*",
 		"index.js",
+		"index.d.ts",
+		"index.js.map",
+		"index.d.ts.map",
 		"README.md"
 	],
 	"publishConfig": {
@@ -17,11 +20,16 @@
 	},
 	"access": "public",
 	"scripts": {
-		"build": "wasm-pack build --release --target nodejs --out-dir pkg && rm -f pkg/.gitignore && rm -f pkg/README.md && rm -f pkg/LICENSE && rm -f pkg/package.json",
-		"test": "npm run build && npm run test:rust && npm run test:js",
+		"build:wasm": "wasm-pack build --release --target nodejs --out-dir pkg && rm -f pkg/.gitignore && rm -f pkg/README.md && rm -f pkg/LICENSE && rm -f pkg/package.json",
+		"build:ts": "tsc",
+		"build": "npm run build:wasm && npm run build:ts",
 		"test:rust": "cargo test",
 		"test:js": "node tests/test.js",
-		"prepublishOnly": "npm run build"
+		"typecheck": "tsc --noEmit",
+		"test": "npm run build && npm run test:rust && npm run test:js",
+		"clean": "rm -f index.js index.d.ts index.js.map index.d.ts.map",
+		"rebuild": "npm run clean && npm run build",
+		"prepublishOnly": "npm run rebuild"
 	},
 	"keywords": [
 		"cli",
@@ -42,7 +50,10 @@
 		"node": ">=20.0.0"
 	},
 	"devDependencies": {
-		"wasm-pack": "^0.13.1"
+		"wasm-pack": "^0.13",
+		"@types/glob": "^8",
+		"@types/node": "^20",
+		"typescript": "^5"
 	},
 	"dependencies": {
 		"glob": "^11"
