@@ -1,5 +1,4 @@
 const { spawnSync } = require("child_process");
-
 const { parse } = require("../pkg/liquid_docs.js");
 
 const PARSE_TESTS = [
