@@ -40,11 +40,11 @@ To install:
 npm i @the-working-party/liquid-docs
 ```
 
-```js
-const { parse } = require("@the-working-party/liquid-docs");
+```ts
+import { parse, ParseResult } from "@the-working-party/liquid-docs";
 
 // An example liquid snippet file
-const result = parse(`
+const result: ParseResult = parse(`
 {%- doc -%}
 Renders an image block.
 
