@@ -206,13 +206,13 @@ permissions:
 
 jobs:
   liquid-docs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
 
       - name: Install liquid-docs
         run: npm i -g @the-working-party/liquid-docs
@@ -251,12 +251,13 @@ jobs:
 ## Contribution
 
 To contribute please note:
-- As much of the logic as possible is kept in the rust code base to keep this library fast and
-efficient. JS is only used to interface with the filesystem as WASI isn't mature enough yet.
+- As much of the logic as possible is kept in the rust code base to keep this library fast and efficient.
+  JS is only used to interface with the filesystem as WASI isn't mature enough yet.
 - We use the definitions of the upstream [Shopify/theme-liquid-docs](https://raw.githubusercontent.com/Shopify/theme-liquid-docs/main/data/objects.json) repo to detect valid types. This is checked in a [Github action](./.github/workflows/update_shopify_objects.yml) once a day and if changes are found a PR is generated automatically.
 
 ## Releases
 
+- v3.3.1  - Updated dependencies
 - v3.3.0  - Added new Shopify Liquid types `remote_details`, `remote_product` and `remote_shop`
 - v3.2.0  - Converted JavaScript wrapper to TypeScript, fixed small parser bugs
 - v3.1.0  - Added CI mode, error on parsing issues and warn flags to checker, Improved errors with line and column number

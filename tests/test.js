@@ -1,5 +1,5 @@
 const { spawnSync } = require("child_process");
-const { parse } = require("../pkg/liquid_docs.js");
+const { parse, parse_batch } = require("../pkg/liquid_docs.js");
 
 const PARSE_TESTS = [
 	{
@@ -153,6 +153,53 @@ PARSE_TESTS.forEach((test) => {
 
 if (failed == 0) {
 	let passed = PARSE_TESTS.length - failed;
+	console.log(
+		`\n\x1B[32mPassed ${passed} test${passed > 1 ? "s" : ""}!\x1B[39m`,
+	);
+} else {
+	console.log(
+		`\n\x1B[31mFailed ${failed} test${failed > 1 ? "s" : ""}!\x1B[39m`,
+	);
+	process.exit(1);
+}
+
+const INPUT_ERROR_TESTS = [
+	{
+		title: "Malformed batch input throws a catchable error",
+		run: () => {
+			let error_message = "";
+			try {
+				parse_batch([{ nope: 1 }]);
+			} catch (error) {
+				error_message = error instanceof Error ? error.message : "";
+			}
+			// the instance must keep working after a failed call
+			const result = parse_batch([
+				{ path: "a.liquid", content: "{% doc %}\n@description hi\n{% enddoc %}" },
+			]);
+			return (
+				error_message.includes("FileInput") &&
+				result.length === 1 &&
+				result[0].liquid_types.success[0].description === "hi"
+			);
+		},
+	},
+];
+
+console.log("\n\x1B[4mRUNNING INPUT ERROR TESTS\x1B[0m");
+failed = 0;
+INPUT_ERROR_TESTS.forEach((test) => {
+	process.stdout.write(`Running test "${test.title}" `);
+	if (test.run()) {
+		process.stdout.write("\x1B[42m PASSED \x1B[49m\n");
+	} else {
+		process.stdout.write("\x1B[41m FAILED \x1B[49m\n");
+		failed++;
+	}
+});
+
+if (failed == 0) {
+	let passed = INPUT_ERROR_TESTS.length - failed;
 	console.log(
 		`\n\x1B[32mPassed ${passed} test${passed > 1 ? "s" : ""}!\x1B[39m`,
 	);
