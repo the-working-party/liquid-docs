@@ -257,6 +257,7 @@ To contribute please note:
 
 ## Releases
 
+- v3.4.0  - Added new Shopify Liquid types `brand_colors`, `metafield_namespace`, `metafields` and `option_with_value`
 - v3.3.1  - Updated dependencies
 - v3.3.0  - Added new Shopify Liquid types `remote_details`, `remote_product` and `remote_shop`
 - v3.2.0  - Converted JavaScript wrapper to TypeScript, fixed small parser bugs
