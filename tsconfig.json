@@ -1,8 +1,9 @@
 {
 	"compilerOptions": {
-		"target": "ES2024",
-		"module": "commonjs",
-		"lib": ["ES2024"],
+		"target": "ES2023",
+		"module": "node20",
+		"lib": ["ES2023"],
+		"types": ["node"],
 		"outDir": "./",
 		"rootDir": "./",
 		"strict": true,
@@ -13,7 +14,6 @@
 		"declaration": true,
 		"declarationMap": true,
 		"sourceMap": true,
-		"moduleResolution": "node",
 		"noEmitOnError": true,
 		"removeComments": false,
 		"preserveConstEnums": true

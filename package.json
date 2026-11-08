@@ -1,6 +1,6 @@
 {
 	"name": "@the-working-party/liquid-docs",
-	"version": "3.3.0",
+	"version": "3.3.1",
 	"description": "A parser for Shopify liquid doc tags using Rust/WASM",
 	"bin": {
 		"liquid-docs-check": "index.js"
@@ -16,20 +16,21 @@
 		"README.md"
 	],
 	"publishConfig": {
-		"registry": "https://registry.npmjs.org"
+		"registry": "https://registry.npmjs.org",
+		"access": "public"
 	},
-	"access": "public",
+	"packageManager": "pnpm@12.18.0",
 	"scripts": {
 		"build:wasm": "wasm-pack build --release --target nodejs --out-dir pkg && rm -f pkg/.gitignore && rm -f pkg/README.md && rm -f pkg/LICENSE && rm -f pkg/package.json",
 		"build:ts": "tsc",
-		"build": "npm run build:wasm && npm run build:ts",
+		"build": "pnpm run build:wasm && pnpm run build:ts",
 		"test:rust": "cargo test",
 		"test:js": "node tests/test.js",
 		"typecheck": "tsc --noEmit",
-		"test": "npm run build && npm run test:rust && npm run test:js",
+		"test": "pnpm run build && pnpm run test:rust && pnpm run test:js",
 		"clean": "rm -f index.js index.d.ts index.js.map index.d.ts.map",
-		"rebuild": "npm run clean && npm run build",
-		"prepublishOnly": "npm run rebuild"
+		"rebuild": "pnpm run clean && pnpm run build",
+		"prepublishOnly": "pnpm run rebuild"
 	},
 	"keywords": [
 		"cli",
@@ -50,12 +51,11 @@
 		"node": ">=20.0.0"
 	},
 	"devDependencies": {
-		"wasm-pack": "^0.13",
-		"@types/glob": "^8",
-		"@types/node": "^20",
-		"typescript": "^5"
+		"@types/node": "^20.19.43",
+		"typescript": "^7.0.2",
+		"wasm-pack": "^0.15.1"
 	},
 	"dependencies": {
-		"glob": "^11"
+		"glob": "^14.0.4"
 	}
 }
